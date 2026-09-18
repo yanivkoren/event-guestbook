@@ -1,8 +1,6 @@
 {
-  "cleanUrls": true,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/manager", "destination": "/index.html" },
-    { "source": "/manager/:path*", "destination": "/index.html" },
-    { "source": "/e/:path*", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
