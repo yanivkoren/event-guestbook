@@ -43,8 +43,8 @@ const API=SUPABASE_URL+'/functions/v1/guestbook-demo';
 const supabase=createClient(SUPABASE_URL,SUPABASE_KEY);
 const app=document.getElementById('app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const qs=new URLSearchParams(location.search);
-const path=location.pathname.replace(/\/+$/,'')||'/';
+const currentPath=()=>location.pathname.replace(/\/+$/,'')||'/';
+const currentQuery=()=>new URLSearchParams(location.search);
 const go=p=>{history.pushState({},'',p);route()};
 window.addEventListener('popstate',route);
 
@@ -215,6 +215,8 @@ async function renderSubmissions(eventId){
 }
 
 async function route(){
+  const path=currentPath();
+  const qs=currentQuery();
   const adminToken=qs.get('admin');
   if(adminToken){location.href='/manager';return}
   if(path==='/manager'){await renderDashboard();return}
