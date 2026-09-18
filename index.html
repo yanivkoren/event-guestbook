@@ -28,7 +28,7 @@ a{color:inherit}.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
 .status.pending{background:#fff7d6;color:#765b00}.status.approved{background:#e9f8ed;color:#19642c}.status.rejected{background:#feecec;color:#8e1e1e}
 .auth{max-width:460px;margin:60px auto}.center{text-align:center}.qrbox{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:16px}.qr{background:#fff;padding:10px;border:1px solid #ddd;border-radius:12px}
 .loading{padding:50px;text-align:center;color:#666}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 18px}.filter{border:1px solid #ddd;background:#fff;border-radius:999px;padding:8px 12px;cursor:pointer}.filter.active{background:#111;color:#fff;border-color:#111}.event-link{direction:ltr;text-align:left;word-break:break-all}.notice{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 16px;border-radius:999px;z-index:50;box-shadow:0 8px 24px #0003}.muted{opacity:.65}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 18px}.filter{border:1px solid #ddd;background:#fff;border-radius:999px;padding:8px 12px;cursor:pointer}.filter.active{background:#111;color:#fff;border-color:#111}.event-link{direction:ltr;text-align:left;word-break:break-all}.notice{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 16px;border-radius:999px;z-index:50;box-shadow:0 8px 24px #0003}.muted{opacity:.65}.member{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid #eee}.member:last-child{border-bottom:0}.role{background:#eee;border-radius:999px;padding:5px 8px;font-size:12px;font-weight:700}.role.super{background:#efe7ff;color:#5b2b8a}.navrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding-top:14px}.actions .btn{flex:1}.top{align-items:flex-start}}
 </style>
 </head>
@@ -55,7 +55,31 @@ function localInputValue(iso){if(!iso)return'';const d=new Date(iso);const z=n=>
 function toIso(v){return v?new Date(v).toISOString():null}
 async function edge(url,opts){const r=await fetch(url,opts);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||'אירעה שגיאה');return j}
 async function session(){const {data}=await supabase.auth.getSession();return data.session}
-async function requireSession(){const s=await session();if(!s){renderAuth();return null}return s}
+let orgContext=null;
+async function loadOrgContext(){
+  const s=await session();if(!s)return null;
+  const {data:claimed,error:claimErr}=await supabase.rpc('claim_my_organization_membership');
+  if(claimErr)console.warn(claimErr);
+  const {data:member,error}=await supabase.from('organization_members').select('id,organization_id,email,display_name,role,status').eq('user_id',s.user.id).eq('status','active').maybeSingle();
+  if(error||!member)return null;
+  const [{data:org},{data:settings}]=await Promise.all([
+    supabase.from('organizations').select('id,name').eq('id',member.organization_id).maybeSingle(),
+    supabase.from('organization_settings').select('*').eq('organization_id',member.organization_id).maybeSingle()
+  ]);
+  orgContext={session:s,member,org,settings};return orgContext;
+}
+async function requireOrg(){
+  const s=await session();if(!s){renderAuth();return null}
+  const c=await loadOrgContext();
+  if(!c){
+    app.className='wrap auth';
+    app.innerHTML='<section class="card"><div class="content center"><h1>אין הרשאה למערכת</h1><p>החשבון מחובר, אבל הוא לא הוגדר כעובד פעיל בארגון.</p><button class="btn secondary" id="noAccessLogout">התנתקות</button></div></section>';
+    document.getElementById('noAccessLogout').onclick=async()=>{await supabase.auth.signOut();orgContext=null;go('/manager')};
+    return null
+  }
+  return c
+}
+async function requireSession(){const c=await requireOrg();return c?.session||null}
 function toast(t){const x=document.createElement('div');x.className='notice';x.textContent=t;document.body.appendChild(x);setTimeout(()=>x.remove(),1800)}
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('הקישור הועתק')}catch{prompt('העתק את הקישור:',t)}}
 function guestUrl(slug){return location.origin+'/e/'+slug}
@@ -88,23 +112,25 @@ async function renderGuest(slug){
 
 function renderAuth(){
   app.className='wrap auth';
-  app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">התחברות או פתיחת חשבון מנהל</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">פתיחת חשבון</button></div></div></section>`;
+  app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">כניסה לעובדי הארגון</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">הפעלת חשבון עובד</button></div></div></section>`;
   const msg=t=>document.getElementById('authMsg').innerHTML=`<div class="msg">${esc(t)}</div>`;
-  document.getElementById('signIn').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return msg(error.message);go('/manager')};
-  document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session)go('/manager');else msg('החשבון נוצר. אם נשלח אליך מייל אימות, אשר אותו ואז התחבר.')};
+  document.getElementById('signIn').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return msg(error.message);orgContext=null;go('/manager')};
+  document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<6)return msg('יש להזין אימייל וסיסמה של לפחות 6 תווים.');const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session){orgContext=null;go('/manager')}else msg('החשבון נוצר. אם נשלח מייל אימות, יש לאשר אותו ואז להתחבר. הגישה תיפתח רק אם הסופר־מנהל הגדיר את האימייל הזה כעובד.')};
 }
 
 async function renderDashboard(){
-  const s=await requireSession();if(!s)return;
+  const ctx=await requireOrg();if(!ctx)return;const s=ctx.session;
   app.className='wrap';app.innerHTML='<div class="loading">טוען Dashboard...</div>';
   const {data:events,error}=await supabase.from('events').select('id,name,title,slug,status,event_date,submission_start_at,submission_end_at,created_at').is('deleted_at',null).order('created_at',{ascending:false});
   if(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
   const ids=events.map(e=>e.id);let counts={};
   if(ids.length){const {data}=await supabase.from('submissions').select('event_id,moderation_status').in('event_id',ids).eq('status','submitted').is('deleted_at',null);for(const x of data||[]){counts[x.event_id]??={total:0,pending:0,approved:0,rejected:0};counts[x.event_id].total++;counts[x.event_id][x.moderation_status]++}}
   const cards=events.map(e=>{const c=counts[e.id]||{total:0,pending:0,approved:0,rejected:0};const state=eventOpenState(e);const date=e.event_date?new Date(e.event_date+'T12:00:00').toLocaleDateString('he-IL'):'';return `<article class="event-card"><div class="row" style="justify-content:space-between"><div><h3>${esc(e.title)}</h3><div class="small">${date?esc(date)+' · ':''}${state?esc(state)+' · ':''}<span class="event-link">${esc(e.slug)}</span></div></div><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span></div><div class="stats"><span class="pill">סה״כ ${c.total}</span><span class="pill">ממתינות ${c.pending}</span><span class="pill">אושרו ${c.approved}</span><span class="pill">נדחו ${c.rejected}</span></div><div class="row"><button class="btn secondary" data-edit="${e.id}">עריכה</button><button class="btn secondary" data-subs="${e.id}">שליחות</button>${e.status==='published'?`<button class="btn secondary" data-open="${esc(e.slug)}">עמוד אורחים</button><button class="btn secondary" data-copy="${esc(e.slug)}">העתקת קישור</button>`:''}</div></article>`}).join('');
-  app.innerHTML=`<div class="top"><div><div class="small">${esc(s.user.email||'')}</div><h1>האירועים שלי</h1><div class="small">${events.length} אירועים</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים. צור את האירוע הראשון שלך.</div>'}</div>`;
+  app.innerHTML=`<div class="top"><div><div class="small">${esc(ctx.org?.name||'הארגון')} · ${ctx.member.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'} · ${esc(s.user.email||'')}</div><h1>אירועי הארגון</h1><div class="small">${events.length} אירועים</div><div class="navrow">${ctx.member.role==='super_admin'?'<button class="btn secondary" id="teamBtn">עובדים</button><button class="btn secondary" id="settingsBtn">הגדרות ארגון</button>':''}</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים בארגון. צור את האירוע הראשון.</div>'}</div>`;
   const newBtn=document.getElementById('newEvent');newBtn.onclick=async()=>{newBtn.disabled=true;newBtn.textContent='יוצר...';await createEvent();newBtn.disabled=false;newBtn.textContent='+ אירוע חדש'};
-  document.getElementById('logout').onclick=async()=>{await supabase.auth.signOut();go('/manager')};
+  document.getElementById('logout').onclick=async()=>{await supabase.auth.signOut();orgContext=null;go('/manager')};
+  document.getElementById('teamBtn')?.addEventListener('click',()=>go('/manager/team'));
+  document.getElementById('settingsBtn')?.addEventListener('click',()=>go('/manager/settings'));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.edit));
   document.querySelectorAll('[data-subs]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.subs+'/submissions'));
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>window.open('/e/'+b.dataset.open,'_blank'));
@@ -112,14 +138,23 @@ async function renderDashboard(){
 }
 
 async function createEvent(){
-  const s=await requireSession();if(!s)return;
+  const ctx=await requireOrg();if(!ctx)return;const s=ctx.session;
   const {data:types,error:tErr}=await supabase.from('event_types').select('id,code,name').eq('is_active',true).order('sort_order');
   if(tErr)return alert(tErr.message);
   const type=types.find(t=>t.code==='other')||types[0];if(!type)return alert('לא נמצאו סוגי אירועים');
-  const now=new Date(),end=new Date(now.getTime()+30*86400000),slug='event-'+crypto.randomUUID().slice(0,8);
-  const {data:e,error}=await supabase.from('events').insert({owner_user_id:s.user.id,event_type_id:type.id,name:'אירוע חדש',title:'אירוע חדש',submission_start_at:now.toISOString(),submission_end_at:end.toISOString(),timezone:'Asia/Jerusalem',language:'he',slug,status:'draft'}).select().single();
+  const cfg=ctx.settings||{},windowDays=Number(cfg.default_submission_window_days||30);
+  const now=new Date(),end=new Date(now.getTime()+windowDays*86400000),slug='event-'+crypto.randomUUID().slice(0,8);
+  const {data:e,error}=await supabase.from('events').insert({
+    organization_id:ctx.member.organization_id,
+    created_by_user_id:s.user.id,
+    owner_user_id:s.user.id,
+    event_type_id:type.id,name:'אירוע חדש',title:'אירוע חדש',
+    submission_start_at:now.toISOString(),submission_end_at:end.toISOString(),
+    timezone:cfg.timezone||'Asia/Jerusalem',language:cfg.language||'he',slug,status:'draft'
+  }).select().single();
   if(error)return alert(error.message);
   const {data:its,error:iErr}=await supabase.from('input_types').select('id,code').order('sort_order');if(iErr)return alert(iErr.message);
+  const globalInputs=cfg.default_input_config||{};
   const defs={
     guest_name:{enabled:true,required:true,sort_order:1,label:'השם שלכם',placeholder:'איך קוראים לכם?',help_text:null,settings:{max_length:100,min_length:1}},
     long_text:{enabled:true,required:false,sort_order:2,label:'כתבו ברכה',placeholder:'כתבו כאן את הברכה שלכם...',help_text:null,settings:{max_length:2000}},
@@ -128,6 +163,7 @@ async function createEvent(){
     reaction:{enabled:true,required:false,sort_order:5,label:'בחרו תגובה',placeholder:null,help_text:'איך אתם מרגישים?',settings:{options:[{id:'love',emoji:'❤️',label:'אוהבים אתכם'},{id:'mazal_tov',emoji:'🎉',label:'מזל טוב!'},{id:'cheers',emoji:'🥂',label:'לחיים!'}],selection_mode:'single'}},
     drawing:{enabled:false,required:false,sort_order:6,label:'השאירו את החותם שלכם',placeholder:null,help_text:'בקרוב',settings:{background:'transparent'}}
   };
+  for(const code of Object.keys(defs)){if(globalInputs[code]){defs[code].enabled=!!globalInputs[code].enabled;defs[code].required=!!globalInputs[code].required}if(code==='guest_name'){defs[code].enabled=true;defs[code].required=true}}
   const rows=its.map(t=>({event_id:e.id,input_type_id:t.id,...defs[t.code]}));const x=await supabase.from('event_inputs').insert(rows);if(x.error)return alert(x.error.message);
   await supabase.from('event_output_config').insert({event_id:e.id,generation_mode:'none',post_submission_mode:'confirmation'});
   go('/manager/event/'+e.id)
@@ -223,12 +259,39 @@ async function renderSubmissions(eventId){
   document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=async()=>{const status=b.dataset.mod,id=b.dataset.id;b.disabled=true;const patch={moderation_status:status,moderated_at:status==='pending'?null:new Date().toISOString(),moderated_by_user_id:status==='pending'?null:s.user.id,updated_at:new Date().toISOString()};const {error}=await supabase.from('submissions').update(patch).eq('id',id).eq('event_id',eventId);if(error){alert(error.message);b.disabled=false}else{toast('הסטטוס עודכן');renderSubmissions(eventId)}})
 }
 
+async function renderTeam(){
+  const ctx=await requireOrg();if(!ctx)return;
+  if(ctx.member.role!=='super_admin'){go('/manager');return}
+  app.className='wrap';app.innerHTML='<div class="loading">טוען עובדים...</div>';
+  const {data:members,error}=await supabase.from('organization_members').select('id,email,display_name,role,status,user_id,created_at').eq('organization_id',ctx.member.organization_id).order('created_at');
+  if(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
+  const items=(members||[]).map(m=>`<div class="member"><div><strong>${esc(m.display_name||m.email)}</strong><div class="small">${esc(m.email)} · ${m.status==='active'?'פעיל':m.status==='invited'?'מוזמן':'מושבת'}</div></div><div class="row"><span class="role ${m.role==='super_admin'?'super':''}">${m.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'}</span>${m.role==='event_manager'? `<button class="btn secondary" data-toggle-member="${m.id}" data-status="${m.status}">${m.status==='disabled'?'הפעל מחדש':'השבת'}</button>` : ''}</div></div>`).join('');
+  app.innerHTML=`<div class="top"><div><button class="btn secondary" id="teamBack">← Dashboard</button><h1>עובדי הארגון</h1><div class="small">רק הסופר־מנהל יכול להוסיף או להשבית עובדים.</div></div></div><section class="card"><div class="content"><h2>הוספת עובד</h2><div class="row"><div class="field grow"><label class="label">שם</label><input class="input" id="memberName" placeholder="למשל: דנה"></div><div class="field grow"><label class="label">אימייל</label><input class="input" id="memberEmail" type="email" placeholder="name@example.com"></div></div><button class="btn" id="addMember">הוסף עובד</button><p class="help">העובד יפעיל חשבון עם אותו אימייל במסך הכניסה. לאחר ההתחברות הוא יצורף אוטומטית לארגון.</p><hr style="border:0;border-top:1px solid #eee;margin:24px 0"><h2>משתמשים</h2>${items}</div></section>`;
+  document.getElementById('teamBack').onclick=()=>go('/manager');
+  document.getElementById('addMember').onclick=async()=>{const name=document.getElementById('memberName').value.trim(),email=document.getElementById('memberEmail').value.trim().toLowerCase();if(!email)return alert('חסר אימייל');const {error}=await supabase.from('organization_members').insert({organization_id:ctx.member.organization_id,email,display_name:name||null,role:'event_manager',status:'invited',created_by_user_id:ctx.session.user.id});if(error)return alert(error.message);toast('העובד נוסף');renderTeam()};
+  document.querySelectorAll('[data-toggle-member]').forEach(b=>b.onclick=async()=>{const status=b.dataset.status==='disabled'?'invited':'disabled';const {error}=await supabase.from('organization_members').update({status,updated_at:new Date().toISOString()}).eq('id',b.dataset.toggleMember);if(error)return alert(error.message);toast(status==='disabled'?'העובד הושבת':'העובד הופעל');renderTeam()})
+}
+
+async function renderOrgSettings(){
+  const ctx=await requireOrg();if(!ctx)return;
+  if(ctx.member.role!=='super_admin'){go('/manager');return}
+  const {data:settings,error}=await supabase.from('organization_settings').select('*').eq('organization_id',ctx.member.organization_id).maybeSingle();
+  if(error||!settings){app.innerHTML='<div class="msg err">לא ניתן לטעון הגדרות</div>';return}
+  const cfg=settings.default_input_config||{};
+  const row=(code,label)=>`<div class="switchrow"><strong>${label}</strong><div class="row"><label><input type="checkbox" data-global-enabled="${code}" ${cfg[code]?.enabled?'checked':''} ${code==='guest_name'?'disabled':''}> פעיל</label><label><input type="checkbox" data-global-required="${code}" ${cfg[code]?.required?'checked':''} ${code==='guest_name'?'disabled':''}> חובה</label></div></div>`;
+  app.className='wrap';app.innerHTML=`<div class="top"><div><button class="btn secondary" id="settingsBack">← Dashboard</button><h1>הגדרות ארגון</h1><div class="small">הגדרות אלה משמשות כברירת מחדל לאירועים חדשים.</div></div></div><section class="card"><div class="content"><div class="field"><label class="label">שם הארגון</label><input class="input" id="orgName" value="${esc(ctx.org?.name||'')}"></div><div class="row"><div class="field grow"><label class="label">אזור זמן</label><select class="select" id="orgTimezone"><option value="Asia/Jerusalem" selected>Asia/Jerusalem</option></select></div><div class="field grow"><label class="label">שפה</label><select class="select" id="orgLanguage"><option value="he" selected>עברית</option></select></div><div class="field grow"><label class="label">חלון שליחה ברירת מחדל (ימים)</label><input class="input" id="windowDays" type="number" min="1" max="365" value="${Number(settings.default_submission_window_days||30)}"></div></div><h2>טופס אורחים ברירת מחדל</h2>${row('guest_name','שם אורח')}${row('long_text','ברכה')}${row('photo','תמונה')}${row('reaction','תגובה')}${row('video','וידאו — בקרוב')}${row('drawing','ציור — בקרוב')}<div class="actions"><span></span><button class="btn" id="saveOrgSettings">שמירת הגדרות</button></div></div></section>`;
+  document.getElementById('settingsBack').onclick=()=>go('/manager');
+  document.getElementById('saveOrgSettings').onclick=async()=>{const name=document.getElementById('orgName').value.trim();const windowDays=Math.max(1,Math.min(365,Number(document.getElementById('windowDays').value||30)));const next={};['guest_name','long_text','photo','reaction','video','drawing'].forEach(code=>{next[code]={enabled:code==='guest_name'?true:!!document.querySelector('[data-global-enabled="'+code+'"]')?.checked,required:code==='guest_name'?true:!!document.querySelector('[data-global-required="'+code+'"]')?.checked}});const [a,b]=await Promise.all([supabase.from('organizations').update({name:name||'הארגון שלי',updated_at:new Date().toISOString()}).eq('id',ctx.member.organization_id),supabase.from('organization_settings').update({timezone:'Asia/Jerusalem',language:'he',default_submission_window_days:windowDays,default_input_config:next,updated_at:new Date().toISOString()}).eq('organization_id',ctx.member.organization_id)]);if(a.error||b.error)return alert(a.error?.message||b.error?.message);orgContext=null;toast('ההגדרות נשמרו');setTimeout(()=>renderOrgSettings(),300)}
+}
+
 async function route(){
   const path=currentPath();
   const qs=currentQuery();
   const adminToken=qs.get('admin');
   if(adminToken){location.href='/manager';return}
   if(path==='/manager'){await renderDashboard();return}
+  if(path==='/manager/team'){await renderTeam();return}
+  if(path==='/manager/settings'){await renderOrgSettings();return}
   const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
   const em=path.match(/^\/manager\/event\/([0-9a-f-]{36})$/i);if(em){await loadEditor(em[1]);return}
   const gm=path.match(/^\/e\/([^/]+)$/);if(gm){await renderGuest(decodeURIComponent(gm[1]));return}
