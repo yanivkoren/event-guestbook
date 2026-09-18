@@ -3,130 +3,228 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Event Guestbook Demo</title>
+<title>Event Guestbook</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{font-family:Arial,system-ui,sans-serif;color:#171717;background:#f7f7f5}
-*{box-sizing:border-box}
-body{margin:0}
-button,input,textarea{font:inherit}
-.wrap{max-width:760px;margin:0 auto;padding:24px 16px 56px}
-.card{background:#fff;border:1px solid #e5e5e5;border-radius:22px;overflow:hidden}
-.hero{padding:28px;background:#f0ede8}
-.content{padding:24px}
-.field{margin:0 0 20px}
-.label{display:block;font-weight:700;margin-bottom:8px}
-.help{display:block;color:#666;font-size:14px;margin:6px 0}
-.input,.textarea{width:100%;border:1px solid #ccc;border-radius:12px;padding:12px 14px;background:#fff}
-.textarea{min-height:120px;resize:vertical}
-.reactions{display:flex;flex-wrap:wrap;gap:8px}
-.reaction input{position:absolute;opacity:0}
-.reaction span{display:inline-block;padding:10px 12px;border:1px solid #ccc;border-radius:12px;cursor:pointer}
-.reaction input:checked+span{border-color:#111;background:#eee}
-.btn{display:inline-block;width:100%;border:0;border-radius:12px;background:#111;color:#fff;padding:14px 18px;font-weight:700;cursor:pointer}
-.btn:disabled{opacity:.55;cursor:not-allowed}
-.msg{padding:16px;border-radius:12px;background:#f1f1f1;margin-bottom:16px}
-.err{background:#fff0f0;color:#8a1515}
-.loading{padding:40px;text-align:center;color:#666}
-.small{font-size:13px;color:#666}
-.adminshell{max-width:980px}
-.adminhead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px}
-.adminhead h1{margin:.2em 0}
-.topactions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.iconbtn{border:1px solid #ddd;background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 18px}
-.stat{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:14px}
-.stat strong{display:block;font-size:24px;margin-top:4px}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
-.filter{border:1px solid #d8d8d8;background:#fff;border-radius:999px;padding:9px 13px;cursor:pointer}
-.filter.active{background:#111;color:#fff;border-color:#111}
-.submission{background:#fff;border:1px solid #e4e4e4;border-radius:18px;padding:18px;margin-bottom:14px}
-.submission-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
-.submission h3{margin:0;font-size:19px}
-.meta{font-size:13px;color:#666;margin-top:5px}
-.bodytext{white-space:pre-wrap;line-height:1.55;margin:14px 0 10px}
-.reactionline{margin:8px 0}
-.thumb{display:block;width:100%;max-height:390px;object-fit:contain;background:#f4f4f4;border-radius:12px;margin-top:12px}
-.badge{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:7px 10px;font-size:13px;font-weight:700}
-.badge.pending{background:#fff7d6;color:#765b00}
-.badge.approved{background:#e9f8ed;color:#19642c}
-.badge.rejected{background:#feecec;color:#8e1e1e}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #eee}
-.action{border:1px solid #d5d5d5;background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:700}
-.action.primary{background:#111;color:#fff;border-color:#111}
-.action.danger{color:#9a1b1b}
-.action:disabled{opacity:.5}
-.empty{background:#fff;border:1px dashed #ccc;border-radius:16px;padding:28px;text-align:center;color:#666}
-.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 16px;border-radius:12px;z-index:10;box-shadow:0 6px 24px #0003}
-@media(max-width:640px){
-  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .submission-top{align-items:flex-start}
-  .actions .action{flex:1}
-}
+*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}
+a{color:inherit}.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
+.card{background:#fff;border:1px solid #e4e4e4;border-radius:20px;overflow:hidden}
+.hero{padding:28px;background:#f1eee9}.content{padding:24px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.grow{flex:1;min-width:220px}
+.field{margin-bottom:18px}.label{display:block;font-weight:700;margin-bottom:8px}.help{font-size:13px;color:#666;margin-top:6px;display:block}
+.input,.textarea,.select{width:100%;padding:12px 14px;border:1px solid #ccc;border-radius:12px;background:#fff}.textarea{min-height:120px;resize:vertical}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;background:#111;color:#fff}.btn.secondary{background:#fff;color:#111;border:1px solid #ccc}.btn.danger{background:#fff;color:#991b1b;border:1px solid #e2bcbc}.btn:disabled{opacity:.5;cursor:not-allowed}
+.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:20px;flex-wrap:wrap}.top h1{margin:.1em 0}
+.small{font-size:13px;color:#666}.msg{padding:14px;border-radius:12px;background:#f1f1f1;margin-bottom:14px}.err{background:#fff0f0;color:#8a1515}.ok{background:#eef8ef;color:#205b2e}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.event-card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:18px}.event-card h3{margin:0 0 8px}
+.badge{display:inline-flex;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.badge.draft{background:#eee}.badge.published{background:#e9f8ed;color:#19642c}.badge.archived{background:#f4e8e8}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.pill{font-size:12px;background:#f3f3f3;border-radius:999px;padding:6px 9px}
+.tabs{display:flex;gap:8px;overflow:auto;padding-bottom:8px;margin-bottom:18px}.tab{border:1px solid #ddd;background:#fff;border-radius:999px;padding:9px 13px;white-space:nowrap;cursor:pointer}.tab.active{background:#111;color:#fff;border-color:#111}
+.step{display:none}.step.active{display:block}.switchrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #eee}.switchrow:last-child{border:0}
+.actions{display:flex;justify-content:space-between;gap:10px;margin-top:22px;flex-wrap:wrap}.preview{border:1px dashed #bbb;border-radius:16px;padding:18px;background:#fafafa}
+.reactions{display:flex;flex-wrap:wrap;gap:8px}.reaction input{position:absolute;opacity:0}.reaction span{display:inline-block;padding:10px 12px;border:1px solid #ccc;border-radius:12px}.reaction input:checked+span{background:#eee;border-color:#111}
+.submission{background:#fff;border:1px solid #ddd;border-radius:16px;padding:18px;margin-bottom:12px}.sub-top{display:flex;justify-content:space-between;gap:10px}.thumb{width:100%;max-height:420px;object-fit:contain;border-radius:12px;background:#f3f3f3;margin-top:10px}
+.status.pending{background:#fff7d6;color:#765b00}.status.approved{background:#e9f8ed;color:#19642c}.status.rejected{background:#feecec;color:#8e1e1e}
+.auth{max-width:460px;margin:60px auto}.center{text-align:center}.qrbox{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:16px}.qr{background:#fff;padding:10px;border:1px solid #ddd;border-radius:12px}
+.loading{padding:50px;text-align:center;color:#666}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding-top:14px}.actions .btn{flex:1}.top{align-items:flex-start}}
 </style>
 </head>
 <body>
 <main id="app" class="wrap"><div class="loading">טוען...</div></main>
-<script>
-const API='https://zladqxbnakzgtwrogjfx.supabase.co/functions/v1/guestbook-demo';
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL='https://zladqxbnakzgtwrogjfx.supabase.co';
+const SUPABASE_KEY='sb_publishable_Jz3ngs_yzwXpCNlTCJO2NA_UDKvi3sZ';
+const API=SUPABASE_URL+'/functions/v1/guestbook-demo';
+const supabase=createClient(SUPABASE_URL,SUPABASE_KEY);
 const app=document.getElementById('app');
-const esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const params=new URLSearchParams(location.search);
-async function json(url,opts){const r=await fetch(url,opts);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||'אירעה שגיאה');return j}
-function renderInput(i){
-  const c=i.code, star=i.required?' *':'';
-  if(c==='guest_name')return `<div class="field"><label class="label" for="guest_name">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<input class="input" id="guest_name" name="guest_name" maxlength="100" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></div>`;
-  if(c==='long_text')return `<div class="field"><label class="label" for="long_text">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<textarea class="textarea" id="long_text" name="long_text" maxlength="2000" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></textarea></div>`;
-  if(c==='reaction'){const opts=(i.settings?.options||[]).map(o=>`<label class="reaction"><input type="radio" name="reaction" value="${esc(o.id)}" ${i.required?'required':''}><span>${esc(o.emoji)} ${esc(o.label)}</span></label>`).join('');return `<div class="field"><div class="label">${esc(i.label)}${star}</div><div class="reactions">${opts}</div></div>`}
-  if(c==='photo')return `<div class="field"><label class="label" for="photo">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" ${i.required?'required':''}><span class="help">בדמו: תמונה אחת, עד 15MB.</span></div>`;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const qs=new URLSearchParams(location.search);
+const path=location.pathname.replace(/\/+$/,'')||'/';
+const go=p=>{history.pushState({},'',p);route()};
+window.addEventListener('popstate',route);
+
+function formatStatus(s){return s==='published'?'פורסם':s==='archived'?'בארכיון':'טיוטה'}
+function slugify(s){return String(s||'').toLowerCase().trim().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').replace(/-+/g,'-').slice(0,48)}
+function localInputValue(iso){if(!iso)return'';const d=new Date(iso);const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`}
+function toIso(v){return v?new Date(v).toISOString():null}
+async function edge(url,opts){const r=await fetch(url,opts);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||'אירעה שגיאה');return j}
+async function session(){const {data}=await supabase.auth.getSession();return data.session}
+async function requireSession(){const s=await session();if(!s){renderAuth();return null}return s}
+
+function guestInput(i){
+  const star=i.required?' *':'';
+  if(i.code==='guest_name')return `<div class="field"><label class="label">${esc(i.label)}${star}</label><input class="input" name="guest_name" maxlength="100" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></div>`;
+  if(i.code==='long_text')return `<div class="field"><label class="label">${esc(i.label)}${star}</label><textarea class="textarea" name="long_text" maxlength="2000" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></textarea></div>`;
+  if(i.code==='reaction'){const o=(i.settings?.options||[]).map(x=>`<label class="reaction"><input type="radio" name="reaction" value="${esc(x.id)}"><span>${esc(x.emoji)} ${esc(x.label)}</span></label>`).join('');return `<div class="field"><div class="label">${esc(i.label)}${star}</div><div class="reactions">${o}</div></div>`}
+  if(i.code==='photo')return `<div class="field"><label class="label">${esc(i.label)}${star}</label><input name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"><span class="help">תמונה אחת, עד 15MB</span></div>`;
   return ''
 }
-async function guest(){
+
+async function renderGuest(slug){
+  app.className='wrap';app.innerHTML='<div class="loading">טוען אירוע...</div>';
   try{
-    const d=await json(API+'?action=config');const e=d.event;
-    if(!d.active){app.innerHTML=`<section class="card"><header class="hero"><h1>${esc(e.title)}</h1><p>${esc(e.description||'')}</p></header><div class="content"><div class="msg">האירוע אינו פתוח כרגע לשליחות.</div></div></section>`;return}
-    app.className='wrap';
-    app.innerHTML=`<section class="card"><header class="hero"><div class="small">LIVE DEMO</div><h1>${esc(e.title)}</h1><p>${esc(e.description||'')}</p></header><div class="content"><form id="guestForm">${d.inputs.map(renderInput).join('')}<div id="status"></div><button class="btn" id="submitBtn">שלחו את הברכה ❤️</button></form></div></section>`;
-    const f=document.getElementById('guestForm');
-    f.addEventListener('submit',async ev=>{
-      ev.preventDefault(); const b=document.getElementById('submitBtn'),s=document.getElementById('status');
-      b.disabled=true;b.textContent='שולח...';s.innerHTML='';
-      try{
-        await json(API+'?action=submit',{method:'POST',body:new FormData(f)});
-        app.innerHTML=`<section class="card"><div class="content" style="text-align:center;padding:42px 24px"><div style="font-size:44px">✓</div><h1>תודה! ❤️</h1><p>הברכה שלכם נשמרה בהצלחה.</p><button class="btn" id="again">שליחה נוספת</button></div></section>`;
-        document.getElementById('again').onclick=()=>{history.replaceState({},'',location.pathname);guest()}
-      }catch(err){s.innerHTML=`<div class="msg err">${esc(err.message)}</div>`;b.disabled=false;b.textContent='שלחו את הברכה ❤️'}
-    })
+    const d=await edge(API+'?action=config&slug='+encodeURIComponent(slug));
+    const e=d.event;
+    app.innerHTML=`<section class="card"><header class="hero"><h1>${esc(e.title)}</h1><p>${esc(e.description||'')}</p></header><div class="content">${!d.active?'<div class="msg">האירוע אינו פתוח כרגע לשליחות.</div>':`<form id="guestForm">${d.inputs.map(guestInput).join('')}<div id="guestMsg"></div><button class="btn" id="guestSubmit">שלחו ❤️</button></form>`}</div></section>`;
+    const f=document.getElementById('guestForm');if(!f)return;
+    f.onsubmit=async ev=>{
+      ev.preventDefault();const b=document.getElementById('guestSubmit'),m=document.getElementById('guestMsg');b.disabled=true;b.textContent='שולח...';m.innerHTML='';
+      try{await edge(API+'?action=submit&slug='+encodeURIComponent(slug),{method:'POST',body:new FormData(f)});app.innerHTML='<section class="card"><div class="content center" style="padding:48px 24px"><div style="font-size:44px">✓</div><h1>תודה! ❤️</h1><p>הברכה נשמרה בהצלחה.</p><button class="btn" id="again">שליחה נוספת</button></div></section>';document.getElementById('again').onclick=()=>renderGuest(slug)}
+      catch(err){m.innerHTML=`<div class="msg err">${esc(err.message)}</div>`;b.disabled=false;b.textContent='שלחו ❤️'}
+    }
   }catch(err){app.innerHTML=`<div class="msg err">${esc(err.message)}</div>`}
 }
-const statusText={pending:'ממתין',approved:'אושר',rejected:'נדחה'};
-let adminData=null,currentFilter='all',adminToken='';
-function toast(text){const old=document.querySelector('.toast');if(old)old.remove();const el=document.createElement('div');el.className='toast';el.textContent=text;document.body.appendChild(el);setTimeout(()=>el.remove(),1800)}
-function statCount(status){return adminData.submissions.filter(s=>s.moderation_status===status).length}
-function renderAdmin(){
-  const subs=adminData.submissions;
-  const filtered=currentFilter==='all'?subs:subs.filter(s=>s.moderation_status===currentFilter);
-  const cards=filtered.map(s=>{
-    const st=s.moderation_status||'pending';
-    const actions=`<div class="actions"><button class="action primary" data-action="approved" data-id="${esc(s.id)}" ${st==='approved'?'disabled':''}>✓ אישור</button><button class="action danger" data-action="rejected" data-id="${esc(s.id)}" ${st==='rejected'?'disabled':''}>✕ דחייה</button><button class="action" data-action="pending" data-id="${esc(s.id)}" ${st==='pending'?'disabled':''}>↺ להמתנה</button></div>`;
-    return `<article class="submission" data-card="${esc(s.id)}"><div class="submission-top"><div><h3>${esc(s.name||'אורח ללא שם')}</h3><div class="meta">${esc(s.submitted_at_display)}</div></div><span class="badge ${esc(st)}">${esc(statusText[st]||st)}</span></div>${s.greeting?`<div class="bodytext">${esc(s.greeting)}</div>`:''}${s.reaction?`<div class="reactionline">${esc(s.reaction)}</div>`:''}${(s.media||[]).map(m=>m.url?`<img class="thumb" src="${esc(m.url)}" alt="תמונה שהועלתה">`:'').join('')}${actions}</article>`
-  }).join('');
-  app.className='wrap adminshell';
-  app.innerHTML=`<div class="adminhead"><div><div class="small">ADMIN DEMO</div><h1>שליחות — ${esc(adminData.event.title)}</h1></div><div class="topactions"><button class="iconbtn" id="refreshBtn">↻ רענון</button></div></div><section class="stats"><div class="stat"><span class="small">סה״כ</span><strong>${subs.length}</strong></div><div class="stat"><span class="small">ממתינות</span><strong>${statCount('pending')}</strong></div><div class="stat"><span class="small">אושרו</span><strong>${statCount('approved')}</strong></div><div class="stat"><span class="small">נדחו</span><strong>${statCount('rejected')}</strong></div></section><div class="filters">${[['all','הכול'],['pending','ממתינות'],['approved','אושרו'],['rejected','נדחו']].map(([v,t])=>`<button class="filter ${currentFilter===v?'active':''}" data-filter="${v}">${t}</button>`).join('')}</div><div id="cards">${cards||'<div class="empty">אין שליחות בקטגוריה הזו.</div>'}</div>`;
-  document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{currentFilter=b.dataset.filter;renderAdmin()});
-  document.getElementById('refreshBtn').onclick=()=>loadAdmin(true);
-  document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>moderate(b.dataset.id,b.dataset.action,b));
+
+function renderAuth(){
+  app.className='wrap auth';
+  app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">התחברות או פתיחת חשבון מנהל</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">פתיחת חשבון</button></div></div></section>`;
+  const msg=t=>document.getElementById('authMsg').innerHTML=`<div class="msg">${esc(t)}</div>`;
+  document.getElementById('signIn').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return msg(error.message);go('/manager')};
+  document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session)go('/manager');else msg('החשבון נוצר. אם נשלח אליך מייל אימות, אשר אותו ואז התחבר.')};
 }
-async function moderate(id,status,button){
-  const row=adminData.submissions.find(s=>s.id===id);if(!row)return;const old=row.moderation_status;
-  document.querySelectorAll(`[data-id="${CSS.escape(id)}"]`).forEach(x=>x.disabled=true);
-  try{
-    await json(API+'?action=moderate&token='+encodeURIComponent(adminToken),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({submission_id:id,status})});
-    row.moderation_status=status;renderAdmin();toast(status==='approved'?'השליחה אושרה':status==='rejected'?'השליחה נדחתה':'השליחה הוחזרה להמתנה');
-  }catch(err){row.moderation_status=old;renderAdmin();alert(err.message)}
+
+async function renderDashboard(){
+  const s=await requireSession();if(!s)return;
+  app.className='wrap';app.innerHTML='<div class="loading">טוען Dashboard...</div>';
+  const {data:events,error}=await supabase.from('events').select('id,name,title,slug,status,event_date,submission_start_at,submission_end_at,created_at').is('deleted_at',null).order('created_at',{ascending:false});
+  if(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
+  const ids=events.map(e=>e.id);let counts={};
+  if(ids.length){const {data}=await supabase.from('submissions').select('event_id,moderation_status').in('event_id',ids).eq('status','submitted').is('deleted_at',null);for(const x of data||[]){counts[x.event_id]??={total:0,pending:0,approved:0,rejected:0};counts[x.event_id].total++;counts[x.event_id][x.moderation_status]++}}
+  const cards=events.map(e=>{const c=counts[e.id]||{total:0,pending:0,approved:0,rejected:0};return `<article class="event-card"><div class="row" style="justify-content:space-between"><div><h3>${esc(e.title)}</h3><div class="small">${esc(e.slug)}</div></div><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span></div><div class="stats"><span class="pill">סה״כ ${c.total}</span><span class="pill">ממתינות ${c.pending}</span><span class="pill">אושרו ${c.approved}</span><span class="pill">נדחו ${c.rejected}</span></div><div class="row"><button class="btn secondary" data-edit="${e.id}">עריכה</button><button class="btn secondary" data-subs="${e.id}">שליחות</button>${e.status==='published'?`<button class="btn secondary" data-open="${esc(e.slug)}">עמוד אורחים</button>`:''}</div></article>`}).join('');
+  app.innerHTML=`<div class="top"><div><div class="small">${esc(s.user.email||'')}</div><h1>האירועים שלי</h1></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים. צור את האירוע הראשון שלך.</div>'}</div>`;
+  document.getElementById('newEvent').onclick=createEvent;
+  document.getElementById('logout').onclick=async()=>{await supabase.auth.signOut();go('/manager')};
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.edit));
+  document.querySelectorAll('[data-subs]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.subs+'/submissions'));
+  document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>window.open('/e/'+b.dataset.open,'_blank'));
 }
-async function loadAdmin(silent=false){try{if(!silent)app.innerHTML='<div class="loading">טוען ניהול...</div>';const d=await json(API+'?action=admin&token='+encodeURIComponent(adminToken));adminData=d;renderAdmin();if(silent)toast('עודכן')}catch(err){app.innerHTML=`<div class="msg err">${esc(err.message)}</div>`}}
-async function admin(token){adminToken=token;await loadAdmin(false)}
-const token=params.get('admin');token?admin(token):guest();
+
+async function createEvent(){
+  const s=await requireSession();if(!s)return;
+  const {data:types,error:tErr}=await supabase.from('event_types').select('id,code,name').eq('is_active',true).order('sort_order');
+  if(tErr)return alert(tErr.message);
+  const type=types.find(t=>t.code==='other')||types[0];if(!type)return alert('לא נמצאו סוגי אירועים');
+  const now=new Date(),end=new Date(now.getTime()+30*86400000),slug='event-'+crypto.randomUUID().slice(0,8);
+  const {data:e,error}=await supabase.from('events').insert({owner_user_id:s.user.id,event_type_id:type.id,name:'אירוע חדש',title:'אירוע חדש',submission_start_at:now.toISOString(),submission_end_at:end.toISOString(),timezone:'Asia/Jerusalem',language:'he',slug,status:'draft'}).select().single();
+  if(error)return alert(error.message);
+  const {data:its,error:iErr}=await supabase.from('input_types').select('id,code').order('sort_order');if(iErr)return alert(iErr.message);
+  const defs={
+    guest_name:{enabled:true,required:true,sort_order:1,label:'השם שלכם',placeholder:'איך קוראים לכם?',help_text:null,settings:{max_length:100,min_length:1}},
+    long_text:{enabled:true,required:false,sort_order:2,label:'כתבו ברכה',placeholder:'כתבו כאן את הברכה שלכם...',help_text:null,settings:{max_length:2000}},
+    photo:{enabled:true,required:false,sort_order:3,label:'הוסיפו תמונה',placeholder:null,help_text:'צלמו עכשיו או בחרו תמונה מהגלריה',settings:{max_files:1}},
+    video:{enabled:false,required:false,sort_order:4,label:'הוסיפו סרטון',placeholder:null,help_text:'בקרוב',settings:{max_files:1,max_duration_seconds:60}},
+    reaction:{enabled:true,required:false,sort_order:5,label:'בחרו תגובה',placeholder:null,help_text:'איך אתם מרגישים?',settings:{options:[{id:'love',emoji:'❤️',label:'אוהבים אתכם'},{id:'mazal_tov',emoji:'🎉',label:'מזל טוב!'},{id:'cheers',emoji:'🥂',label:'לחיים!'}],selection_mode:'single'}},
+    drawing:{enabled:false,required:false,sort_order:6,label:'השאירו את החותם שלכם',placeholder:null,help_text:'בקרוב',settings:{background:'transparent'}}
+  };
+  const rows=its.map(t=>({event_id:e.id,input_type_id:t.id,...defs[t.code]}));const x=await supabase.from('event_inputs').insert(rows);if(x.error)return alert(x.error.message);
+  await supabase.from('event_output_config').insert({event_id:e.id,generation_mode:'none',post_submission_mode:'confirmation'});
+  go('/manager/event/'+e.id)
+}
+
+let editorState=null,step=1;
+async function loadEditor(id){
+  const s=await requireSession();if(!s)return;
+  const [ev,ins,out,types]=await Promise.all([
+    supabase.from('events').select('*').eq('id',id).maybeSingle(),
+    supabase.from('event_inputs').select('id,enabled,required,sort_order,label,placeholder,help_text,settings,input_types!inner(code,name,component_type,supports_required)').eq('event_id',id).order('sort_order'),
+    supabase.from('event_output_config').select('*').eq('event_id',id).maybeSingle(),
+    supabase.from('event_types').select('id,code,name').eq('is_active',true).order('sort_order')
+  ]);
+  if(ev.error||!ev.data){app.innerHTML='<div class="msg err">אירוע לא נמצא</div>';return}
+  editorState={event:ev.data,inputs:(ins.data||[]).map(x=>({...x,input_type:Array.isArray(x.input_types)?x.input_types[0]:x.input_types})),output:out.data,types:types.data||[]};
+  step=1;renderEditor()
+}
+
+function renderEditor(){
+  const e=editorState.event;
+  const typeOptions=editorState.types.map(t=>`<option value="${t.id}" ${t.id===e.event_type_id?'selected':''}>${esc(t.name)}</option>`).join('');
+  const inputRows=editorState.inputs.map(i=>{const disabled=['video','drawing'].includes(i.input_type.code);return `<div class="switchrow"><div><strong>${esc(i.label)}</strong><div class="small">${esc(i.input_type.name)}${disabled?' · בקרוב':''}</div></div><div class="row"><label><input type="checkbox" data-enabled="${i.id}" ${i.enabled?'checked':''} ${disabled?'disabled':''}> פעיל</label><label><input type="checkbox" data-required="${i.id}" ${i.required?'checked':''} ${i.input_type.code==='guest_name'?'disabled':''}> חובה</label></div></div>`}).join('');
+  app.className='wrap';
+  app.innerHTML=`<div class="top"><div><button class="btn secondary" id="backDash">← Dashboard</button><h1>${esc(e.title)}</h1><div class="small">סטטוס: ${formatStatus(e.status)}</div></div><button class="btn secondary" id="openSubs">שליחות</button></div>
+  <div class="tabs">${[1,2,3,4,5].map((n,i)=>`<button class="tab ${step===n?'active':''}" data-step="${n}">${n}. ${['פרטים','זמינות וקישור','טופס אורחים','אחרי שליחה','Preview ופרסום'][i]}</button>`).join('')}</div>
+  <section class="card"><div class="content">
+    <div class="step ${step===1?'active':''}" data-pane="1"><div class="row"><div class="field grow"><label class="label">שם פנימי</label><input class="input" id="name" value="${esc(e.name)}"></div><div class="field grow"><label class="label">סוג אירוע</label><select class="select" id="eventType">${typeOptions}</select></div></div><div class="field"><label class="label">כותרת לאורחים</label><input class="input" id="title" value="${esc(e.title)}"></div><div class="field"><label class="label">תיאור</label><textarea class="textarea" id="description">${esc(e.description||'')}</textarea></div><div class="field"><label class="label">תאריך אירוע</label><input class="input" type="date" id="eventDate" value="${esc(e.event_date||'')}"></div></div>
+    <div class="step ${step===2?'active':''}" data-pane="2"><div class="row"><div class="field grow"><label class="label">פתיחת שליחות</label><input class="input" type="datetime-local" id="startAt" value="${localInputValue(e.submission_start_at)}"></div><div class="field grow"><label class="label">סגירת שליחות</label><input class="input" type="datetime-local" id="endAt" value="${localInputValue(e.submission_end_at)}"></div></div><div class="field"><label class="label">כתובת האירוע</label><div class="row"><span class="small" style="padding-top:12px">/e/</span><input class="input grow" id="slug" value="${esc(e.slug)}"></div><span class="help">אותיות באנגלית, מספרים ומקפים בלבד.</span></div></div>
+    <div class="step ${step===3?'active':''}" data-pane="3"><p class="small">שם אורח נשאר חובה. וידאו וציור שמורים במודל אך יופעלו בגרסה הבאה.</p>${inputRows}</div>
+    <div class="step ${step===4?'active':''}" data-pane="4"><div class="field"><label class="label">מה קורה אחרי שליחה?</label><select class="select" id="postMode"><option value="confirmation" ${editorState.output?.post_submission_mode==='confirmation'?'selected':''}>מסך תודה</option><option value="custom" ${editorState.output?.post_submission_mode==='custom'?'selected':''}>תוכן מותאם</option><option value="generated_artifact" disabled>Generated Artifact — בקרוב</option></select></div><div class="field"><label class="label">AI / Generation</label><select class="select" id="genMode"><option value="none">ללא</option><option value="manual" disabled>ידני — בקרוב</option><option value="immediate" disabled>מיידי — בקרוב</option></select></div></div>
+    <div class="step ${step===5?'active':''}" data-pane="5"><div class="preview"><h2>${esc(e.title)}</h2><p>${esc(e.description||'')}</p><p class="small">קישור: ${location.origin}/e/${esc(e.slug)}</p><div id="qr" class="qrbox"></div></div><div id="publishMsg" style="margin-top:14px"></div></div>
+    <div class="actions"><button class="btn secondary" id="prev" ${step===1?'disabled':''}>הקודם</button><div class="row"><button class="btn secondary" id="save">שמירה</button>${step===5?`<button class="btn" id="publish">${e.status==='published'?'שמירה ופרסום מחדש':'פרסום האירוע'}</button>`:`<button class="btn" id="next">הבא</button>`}</div></div>
+  </div></section>`;
+
+  document.getElementById('backDash').onclick=()=>go('/manager');
+  document.getElementById('openSubs').onclick=()=>go('/manager/event/'+e.id+'/submissions');
+  document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{step=Number(b.dataset.step);renderEditor()});
+  document.getElementById('prev').onclick=()=>{step--;renderEditor()};
+  document.getElementById('next')?.addEventListener('click',async()=>{if(await saveEditor()){step++;renderEditor()}});
+  document.getElementById('save').onclick=saveEditor;
+  document.getElementById('publish')?.addEventListener('click',publishEditor);
+  if(step===5&&window.QRCode){const q=document.getElementById('qr');new QRCode(q,{text:location.origin+'/e/'+e.slug,width:150,height:150})}
+}
+
+async function saveEditor(){
+  const e=editorState.event;
+  if(step===1){
+    const patch={name:document.getElementById('name').value.trim(),title:document.getElementById('title').value.trim(),description:document.getElementById('description').value.trim()||null,event_date:document.getElementById('eventDate').value||null,event_type_id:document.getElementById('eventType').value,updated_at:new Date().toISOString()};
+    if(!patch.title){alert('חסרה כותרת');return false}
+    const {error}=await supabase.from('events').update(patch).eq('id',e.id);if(error){alert(error.message);return false}Object.assign(e,patch)
+  }
+  if(step===2){
+    const slug=slugify(document.getElementById('slug').value),start=toIso(document.getElementById('startAt').value),end=toIso(document.getElementById('endAt').value);
+    if(!slug){alert('קישור לא תקין');return false}if(!start||!end||new Date(end)<=new Date(start)){alert('מועד הסיום חייב להיות אחרי מועד ההתחלה');return false}
+    const {data:dup}=await supabase.from('events').select('id').eq('slug',slug).neq('id',e.id).maybeSingle();if(dup){alert('הקישור הזה כבר תפוס');return false}
+    const patch={slug,submission_start_at:start,submission_end_at:end,updated_at:new Date().toISOString()};const {error}=await supabase.from('events').update(patch).eq('id',e.id);if(error){alert(error.message);return false}Object.assign(e,patch)
+  }
+  if(step===3){
+    for(const i of editorState.inputs){
+      const enabled=i.input_type.code==='guest_name'?true:!!document.querySelector('[data-enabled="'+i.id+'"]')?.checked;
+      const required=i.input_type.code==='guest_name'?true:!!document.querySelector('[data-required="'+i.id+'"]')?.checked;
+      const {error}=await supabase.from('event_inputs').update({enabled,required,updated_at:new Date().toISOString()}).eq('id',i.id).eq('event_id',e.id);if(error){alert(error.message);return false}i.enabled=enabled;i.required=required;
+    }
+  }
+  if(step===4&&editorState.output){
+    const post=document.getElementById('postMode').value;const {error}=await supabase.from('event_output_config').update({post_submission_mode:post,generation_mode:'none',updated_at:new Date().toISOString()}).eq('event_id',e.id);if(error){alert(error.message);return false}editorState.output.post_submission_mode=post
+  }
+  return true
+}
+
+async function publishEditor(){
+  if(!await saveEditor())return;
+  const e=editorState.event;
+  const nameInput=editorState.inputs.find(i=>i.input_type.code==='guest_name');if(!nameInput?.enabled||!nameInput?.required){alert('שם האורח חייב להיות פעיל וחובה');return}
+  const {error}=await supabase.from('events').update({status:'published',published_at:e.published_at||new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',e.id);if(error)return alert(error.message);
+  e.status='published';document.getElementById('publishMsg').innerHTML=`<div class="msg ok">פורסם בהצלחה. <a href="/e/${esc(e.slug)}" target="_blank"><u>פתח את עמוד האורחים</u></a></div>`;renderEditor()
+}
+
+async function renderSubmissions(eventId){
+  const s=await requireSession();if(!s)return;
+  app.className='wrap';app.innerHTML='<div class="loading">טוען שליחות...</div>';
+  const {data:e}=await supabase.from('events').select('id,title,slug').eq('id',eventId).maybeSingle();if(!e){app.innerHTML='<div class="msg err">אירוע לא נמצא</div>';return}
+  const {data:subs,error}=await supabase.from('submissions').select('id,submitted_at,moderation_status,submission_values(text_value,json_value,event_inputs(input_types(code))),media(id,media_type,storage_key)').eq('event_id',eventId).eq('status','submitted').is('deleted_at',null).order('submitted_at',{ascending:false});
+  if(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
+  const rows=[];
+  for(const x of subs||[]){let name='',greeting='',reaction='';for(const v of x.submission_values||[]){const ei=Array.isArray(v.event_inputs)?v.event_inputs[0]:v.event_inputs;const it=Array.isArray(ei?.input_types)?ei.input_types[0]:ei?.input_types;if(it?.code==='guest_name')name=v.text_value||'';if(it?.code==='long_text')greeting=v.text_value||'';if(it?.code==='reaction'){const o=v.json_value?.selected?.[0];reaction=o?`${o.emoji||''} ${o.label||''}`:''}}let media=[];for(const m of x.media||[]){const {data}=await supabase.storage.from('guest-media').createSignedUrl(m.storage_key,3600);if(data?.signedUrl)media.push({type:m.media_type,url:data.signedUrl})}rows.push({...x,name,greeting,reaction,media})}
+  const card=r=>`<article class="submission"><div class="sub-top"><div><strong>${esc(r.name||'ללא שם')}</strong><div class="small">${new Date(r.submitted_at).toLocaleString('he-IL')}</div></div><span class="badge status ${esc(r.moderation_status)}">${r.moderation_status==='approved'?'אושר':r.moderation_status==='rejected'?'נדחה':'ממתין'}</span></div>${r.greeting?`<p>${esc(r.greeting)}</p>`:''}${r.reaction?`<p>${esc(r.reaction)}</p>`:''}${r.media.map(m=>`<img class="thumb" src="${esc(m.url)}">`).join('')}<div class="row" style="margin-top:12px"><button class="btn secondary" data-mod="approved" data-id="${r.id}" ${r.moderation_status==='approved'?'disabled':''}>✓ אישור</button><button class="btn secondary" data-mod="rejected" data-id="${r.id}" ${r.moderation_status==='rejected'?'disabled':''}>✕ דחייה</button><button class="btn secondary" data-mod="pending" data-id="${r.id}" ${r.moderation_status==='pending'?'disabled':''}>↺ להמתנה</button></div></article>`;
+  app.innerHTML=`<div class="top"><div><button class="btn secondary" id="backEvent">← לאירוע</button><h1>שליחות — ${esc(e.title)}</h1></div><button class="btn secondary" id="guestPage">עמוד אורחים</button></div><div id="subs">${rows.map(card).join('')||'<div class="msg">אין עדיין שליחות.</div>'}</div>`;
+  document.getElementById('backEvent').onclick=()=>go('/manager/event/'+eventId);document.getElementById('guestPage').onclick=()=>window.open('/e/'+e.slug,'_blank');
+  document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=async()=>{const status=b.dataset.mod,id=b.dataset.id;const patch={moderation_status:status,moderated_at:status==='pending'?null:new Date().toISOString(),moderated_by_user_id:status==='pending'?null:s.user.id,updated_at:new Date().toISOString()};const {error}=await supabase.from('submissions').update(patch).eq('id',id).eq('event_id',eventId);if(error)alert(error.message);else renderSubmissions(eventId)})
+}
+
+async function route(){
+  const adminToken=qs.get('admin');
+  if(adminToken){location.href='/manager';return}
+  if(path==='/manager'){await renderDashboard();return}
+  const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
+  const em=path.match(/^\/manager\/event\/([0-9a-f-]{36})$/i);if(em){await loadEditor(em[1]);return}
+  const gm=path.match(/^\/e\/([^/]+)$/);if(gm){await renderGuest(decodeURIComponent(gm[1]));return}
+  await renderGuest('demo')
+}
+supabase.auth.onAuthStateChange(()=>{});
+route();
 </script>
 </body>
 </html>
