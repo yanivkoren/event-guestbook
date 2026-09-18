@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event Guestbook Demo</title>
+<style>
+:root{font-family:Arial,system-ui,sans-serif;color:#171717;background:#f7f7f5}
+*{box-sizing:border-box}
+body{margin:0}
+button,input,textarea{font:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 56px}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:22px;overflow:hidden}
+.hero{padding:28px;background:#f0ede8}
+.content{padding:24px}
+.field{margin:0 0 20px}
+.label{display:block;font-weight:700;margin-bottom:8px}
+.help{display:block;color:#666;font-size:14px;margin:6px 0}
+.input,.textarea{width:100%;border:1px solid #ccc;border-radius:12px;padding:12px 14px;background:#fff}
+.textarea{min-height:120px;resize:vertical}
+.reactions{display:flex;flex-wrap:wrap;gap:8px}
+.reaction input{position:absolute;opacity:0}
+.reaction span{display:inline-block;padding:10px 12px;border:1px solid #ccc;border-radius:12px;cursor:pointer}
+.reaction input:checked+span{border-color:#111;background:#eee}
+.btn{display:inline-block;width:100%;border:0;border-radius:12px;background:#111;color:#fff;padding:14px 18px;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.msg{padding:16px;border-radius:12px;background:#f1f1f1;margin-bottom:16px}
+.err{background:#fff0f0;color:#8a1515}
+.loading{padding:40px;text-align:center;color:#666}
+.small{font-size:13px;color:#666}
+.adminshell{max-width:980px}
+.adminhead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px}
+.adminhead h1{margin:.2em 0}
+.topactions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.iconbtn{border:1px solid #ddd;background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+.stat{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:14px}
+.stat strong{display:block;font-size:24px;margin-top:4px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.filter{border:1px solid #d8d8d8;background:#fff;border-radius:999px;padding:9px 13px;cursor:pointer}
+.filter.active{background:#111;color:#fff;border-color:#111}
+.submission{background:#fff;border:1px solid #e4e4e4;border-radius:18px;padding:18px;margin-bottom:14px}
+.submission-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.submission h3{margin:0;font-size:19px}
+.meta{font-size:13px;color:#666;margin-top:5px}
+.bodytext{white-space:pre-wrap;line-height:1.55;margin:14px 0 10px}
+.reactionline{margin:8px 0}
+.thumb{display:block;width:100%;max-height:390px;object-fit:contain;background:#f4f4f4;border-radius:12px;margin-top:12px}
+.badge{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:7px 10px;font-size:13px;font-weight:700}
+.badge.pending{background:#fff7d6;color:#765b00}
+.badge.approved{background:#e9f8ed;color:#19642c}
+.badge.rejected{background:#feecec;color:#8e1e1e}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #eee}
+.action{border:1px solid #d5d5d5;background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:700}
+.action.primary{background:#111;color:#fff;border-color:#111}
+.action.danger{color:#9a1b1b}
+.action:disabled{opacity:.5}
+.empty{background:#fff;border:1px dashed #ccc;border-radius:16px;padding:28px;text-align:center;color:#666}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 16px;border-radius:12px;z-index:10;box-shadow:0 6px 24px #0003}
+@media(max-width:640px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .submission-top{align-items:flex-start}
+  .actions .action{flex:1}
+}
+</style>
+</head>
+<body>
+<main id="app" class="wrap"><div class="loading">טוען...</div></main>
+<script>
+const API='https://zladqxbnakzgtwrogjfx.supabase.co/functions/v1/guestbook-demo';
+const app=document.getElementById('app');
+const esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const params=new URLSearchParams(location.search);
+async function json(url,opts){const r=await fetch(url,opts);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||'אירעה שגיאה');return j}
+function renderInput(i){
+  const c=i.code, star=i.required?' *':'';
+  if(c==='guest_name')return `<div class="field"><label class="label" for="guest_name">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<input class="input" id="guest_name" name="guest_name" maxlength="100" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></div>`;
+  if(c==='long_text')return `<div class="field"><label class="label" for="long_text">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<textarea class="textarea" id="long_text" name="long_text" maxlength="2000" placeholder="${esc(i.placeholder||'')}" ${i.required?'required':''}></textarea></div>`;
+  if(c==='reaction'){const opts=(i.settings?.options||[]).map(o=>`<label class="reaction"><input type="radio" name="reaction" value="${esc(o.id)}" ${i.required?'required':''}><span>${esc(o.emoji)} ${esc(o.label)}</span></label>`).join('');return `<div class="field"><div class="label">${esc(i.label)}${star}</div><div class="reactions">${opts}</div></div>`}
+  if(c==='photo')return `<div class="field"><label class="label" for="photo">${esc(i.label)}${star}</label>${i.help_text?`<span class="help">${esc(i.help_text)}</span>`:''}<input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" ${i.required?'required':''}><span class="help">בדמו: תמונה אחת, עד 15MB.</span></div>`;
+  return ''
+}
+async function guest(){
+  try{
+    const d=await json(API+'?action=config');const e=d.event;
+    if(!d.active){app.innerHTML=`<section class="card"><header class="hero"><h1>${esc(e.title)}</h1><p>${esc(e.description||'')}</p></header><div class="content"><div class="msg">האירוע אינו פתוח כרגע לשליחות.</div></div></section>`;return}
+    app.className='wrap';
+    app.innerHTML=`<section class="card"><header class="hero"><div class="small">LIVE DEMO</div><h1>${esc(e.title)}</h1><p>${esc(e.description||'')}</p></header><div class="content"><form id="guestForm">${d.inputs.map(renderInput).join('')}<div id="status"></div><button class="btn" id="submitBtn">שלחו את הברכה ❤️</button></form></div></section>`;
+    const f=document.getElementById('guestForm');
+    f.addEventListener('submit',async ev=>{
+      ev.preventDefault(); const b=document.getElementById('submitBtn'),s=document.getElementById('status');
+      b.disabled=true;b.textContent='שולח...';s.innerHTML='';
+      try{
+        await json(API+'?action=submit',{method:'POST',body:new FormData(f)});
+        app.innerHTML=`<section class="card"><div class="content" style="text-align:center;padding:42px 24px"><div style="font-size:44px">✓</div><h1>תודה! ❤️</h1><p>הברכה שלכם נשמרה בהצלחה.</p><button class="btn" id="again">שליחה נוספת</button></div></section>`;
+        document.getElementById('again').onclick=()=>{history.replaceState({},'',location.pathname);guest()}
+      }catch(err){s.innerHTML=`<div class="msg err">${esc(err.message)}</div>`;b.disabled=false;b.textContent='שלחו את הברכה ❤️'}
+    })
+  }catch(err){app.innerHTML=`<div class="msg err">${esc(err.message)}</div>`}
+}
+const statusText={pending:'ממתין',approved:'אושר',rejected:'נדחה'};
+let adminData=null,currentFilter='all',adminToken='';
+function toast(text){const old=document.querySelector('.toast');if(old)old.remove();const el=document.createElement('div');el.className='toast';el.textContent=text;document.body.appendChild(el);setTimeout(()=>el.remove(),1800)}
+function statCount(status){return adminData.submissions.filter(s=>s.moderation_status===status).length}
+function renderAdmin(){
+  const subs=adminData.submissions;
+  const filtered=currentFilter==='all'?subs:subs.filter(s=>s.moderation_status===currentFilter);
+  const cards=filtered.map(s=>{
+    const st=s.moderation_status||'pending';
+    const actions=`<div class="actions"><button class="action primary" data-action="approved" data-id="${esc(s.id)}">✓ אישור</button><button class="action danger" data-action="rejected" data-id="${esc(s.id)}">✕ דחייה</button><button class="action" data-action="pending" data-id="${esc(s.id)}">↺ להמתנה</button></div>`;
+    return `<article class="submission" data-card="${esc(s.id)}"><div class="submission-top"><div><h3>${esc(s.name||'אורח ללא שם')}</h3><div class="meta">${esc(s.submitted_at_display)}</div></div><span class="badge ${esc(st)}">${esc(statusText[st]||st)}</span></div>${s.greeting?`<div class="bodytext">${esc(s.greeting)}</div>`:''}${s.reaction?`<div class="reactionline">${esc(s.reaction)}</div>`:''}${(s.media||[]).map(m=>m.url?`<img class="thumb" src="${esc(m.url)}" alt="תמונה שהועלתה">`:'').join('')}${actions}</article>`
+  }).join('');
+  app.className='wrap adminshell';
+  app.innerHTML=`<div class="adminhead"><div><div class="small">ADMIN DEMO</div><h1>שליחות — ${esc(adminData.event.title)}</h1></div><div class="topactions"><button class="iconbtn" id="refreshBtn">↻ רענון</button></div></div><section class="stats"><div class="stat"><span class="small">סה״כ</span><strong>${subs.length}</strong></div><div class="stat"><span class="small">ממתינות</span><strong>${statCount('pending')}</strong></div><div class="stat"><span class="small">אושרו</span><strong>${statCount('approved')}</strong></div><div class="stat"><span class="small">נדחו</span><strong>${statCount('rejected')}</strong></div></section><div class="filters">${[['all','הכול'],['pending','ממתינות'],['approved','אושרו'],['rejected','נדחו']].map(([v,t])=>`<button class="filter ${currentFilter===v?'active':''}" data-filter="${v}">${t}</button>`).join('')}</div><div id="cards">${cards||'<div class="empty">אין שליחות בקטגוריה הזו.</div>'}</div>`;
+  document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{currentFilter=b.dataset.filter;renderAdmin()});
+  document.getElementById('refreshBtn').onclick=()=>loadAdmin(true);
+  document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>moderate(b.dataset.id,b.dataset.action,b));
+}
+async function moderate(id,status,button){
+  const row=adminData.submissions.find(s=>s.id===id);if(!row)return;const old=row.moderation_status;
+  document.querySelectorAll(`[data-id="${CSS.escape(id)}"]`).forEach(x=>x.disabled=true);
+  try{
+    await json(API+'?action=moderate&token='+encodeURIComponent(adminToken),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({submission_id:id,status})});
+    row.moderation_status=status;renderAdmin();toast(status==='approved'?'השליחה אושרה':status==='rejected'?'השליחה נדחתה':'השליחה הוחזרה להמתנה');
+  }catch(err){row.moderation_status=old;renderAdmin();alert(err.message)}
+}
+async function loadAdmin(silent=false){try{if(!silent)app.innerHTML='<div class="loading">טוען ניהול...</div>';const d=await json(API+'?action=admin&token='+encodeURIComponent(adminToken));adminData=d;renderAdmin();if(silent)toast('עודכן')}catch(err){app.innerHTML=`<div class="msg err">${esc(err.message)}</div>`}}
+async function admin(token){adminToken=token;await loadAdmin(false)}
+const token=params.get('admin');token?admin(token):guest();
+</script>
+</body>
+</html>
