@@ -107,7 +107,7 @@ function renderAdmin(){
   const filtered=currentFilter==='all'?subs:subs.filter(s=>s.moderation_status===currentFilter);
   const cards=filtered.map(s=>{
     const st=s.moderation_status||'pending';
-    const actions=`<div class="actions"><button class="action primary" data-action="approved" data-id="${esc(s.id)}">✓ אישור</button><button class="action danger" data-action="rejected" data-id="${esc(s.id)}">✕ דחייה</button><button class="action" data-action="pending" data-id="${esc(s.id)}">↺ להמתנה</button></div>`;
+    const actions=`<div class="actions"><button class="action primary" data-action="approved" data-id="${esc(s.id)}" ${st==='approved'?'disabled':''}>✓ אישור</button><button class="action danger" data-action="rejected" data-id="${esc(s.id)}" ${st==='rejected'?'disabled':''}>✕ דחייה</button><button class="action" data-action="pending" data-id="${esc(s.id)}" ${st==='pending'?'disabled':''}>↺ להמתנה</button></div>`;
     return `<article class="submission" data-card="${esc(s.id)}"><div class="submission-top"><div><h3>${esc(s.name||'אורח ללא שם')}</h3><div class="meta">${esc(s.submitted_at_display)}</div></div><span class="badge ${esc(st)}">${esc(statusText[st]||st)}</span></div>${s.greeting?`<div class="bodytext">${esc(s.greeting)}</div>`:''}${s.reaction?`<div class="reactionline">${esc(s.reaction)}</div>`:''}${(s.media||[]).map(m=>m.url?`<img class="thumb" src="${esc(m.url)}" alt="תמונה שהועלתה">`:'').join('')}${actions}</article>`
   }).join('');
   app.className='wrap adminshell';
