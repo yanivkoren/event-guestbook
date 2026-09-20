@@ -54,6 +54,7 @@ a{color:inherit}.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderGuestCardPage } from '/guest-card-page.js';
+import { renderDesignLibrary } from '/design-library.js';
 
 const SUPABASE_URL='https://zladqxbnakzgtwrogjfx.supabase.co';
 const SUPABASE_KEY='sb_publishable_Jz3ngs_yzwXpCNlTCJO2NA_UDKvi3sZ';
@@ -144,11 +145,12 @@ async function renderDashboard(){
   const ids=events.map(e=>e.id);let counts={};
   if(ids.length){const {data}=await supabase.from('submissions').select('event_id,moderation_status').in('event_id',ids).eq('status','submitted').is('deleted_at',null);for(const x of data||[]){counts[x.event_id]??={total:0,pending:0,approved:0,rejected:0};counts[x.event_id].total++;counts[x.event_id][x.moderation_status]++}}
   const cards=events.map(e=>{const c=counts[e.id]||{total:0,pending:0,approved:0,rejected:0};const state=eventOpenState(e);const date=e.event_date?new Date(e.event_date+'T12:00:00').toLocaleDateString('he-IL'):'';return `<article class="event-card"><div class="row" style="justify-content:space-between"><div><h3>${esc(e.title)}</h3><div class="small">${date?esc(date)+' · ':''}${state?esc(state)+' · ':''}<span class="event-link">${esc(e.slug)}</span></div></div><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span></div><div class="stats"><span class="pill">סה״כ ${c.total}</span><span class="pill">ממתינות ${c.pending}</span><span class="pill">אושרו ${c.approved}</span><span class="pill">נדחו ${c.rejected}</span></div><div class="row"><button class="btn secondary" data-edit="${e.id}">עריכה</button><button class="btn secondary" data-subs="${e.id}">שליחות</button>${e.status==='published'?`<button class="btn secondary" data-open="${esc(e.slug)}">עמוד אורחים</button><button class="btn secondary" data-copy="${esc(e.slug)}">העתקת קישור</button>`:''}</div></article>`}).join('');
-  app.innerHTML=`<div class="top"><div><div class="small">${esc(ctx.org?.name||'הארגון')} · ${ctx.member.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'} · ${esc(s.user.email||'')}</div><h1>אירועי הארגון</h1><div class="small">${events.length} אירועים</div><div class="navrow">${ctx.member.role==='super_admin'?'<button class="btn secondary" id="teamBtn">עובדים</button><button class="btn secondary" id="settingsBtn">הגדרות ארגון</button>':''}</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים בארגון. צור את האירוע הראשון.</div>'}</div>`;
+  app.innerHTML=`<div class="top"><div><div class="small">${esc(ctx.org?.name||'הארגון')} · ${ctx.member.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'} · ${esc(s.user.email||'')}</div><h1>אירועי הארגון</h1><div class="small">${events.length} אירועים</div><div class="navrow">${ctx.member.role==='super_admin'?'<button class="btn secondary" id="teamBtn">עובדים</button><button class="btn secondary" id="designLibraryBtn">ספריית עיצובים</button><button class="btn secondary" id="settingsBtn">הגדרות ארגון</button>':''}</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים בארגון. צור את האירוע הראשון.</div>'}</div>`;
   const newBtn=document.getElementById('newEvent');newBtn.onclick=async()=>{newBtn.disabled=true;newBtn.textContent='יוצר...';await createEvent();newBtn.disabled=false;newBtn.textContent='+ אירוע חדש'};
   document.getElementById('logout').onclick=async()=>{await supabase.auth.signOut();orgContext=null;go('/manager')};
   document.getElementById('teamBtn')?.addEventListener('click',()=>go('/manager/team'));
   document.getElementById('settingsBtn')?.addEventListener('click',()=>go('/manager/settings'));
+  document.getElementById('designLibraryBtn')?.addEventListener('click',()=>go('/manager/designs'));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.edit));
   document.querySelectorAll('[data-subs]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.subs+'/submissions'));
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>window.open('/e/'+b.dataset.open,'_blank'));
@@ -195,10 +197,10 @@ async function loadEditor(id){
     supabase.from('event_inputs').select('id,enabled,required,sort_order,label,placeholder,help_text,settings,input_types!inner(code,name,component_type,supports_required)').eq('event_id',id).order('sort_order'),
     supabase.from('event_output_config').select('*').eq('event_id',id).maybeSingle(),
     supabase.from('event_types').select('id,code,name').eq('is_active',true).order('sort_order'),
-    supabase.from('card_templates').select('id,name').eq('active',true).order('id')
+    supabase.from('card_templates').select('id,name,palettes,frame_options,pattern_options,typography_options,organization_id').eq('active',true).order('id')
   ]);
   if(ev.error||!ev.data){app.innerHTML='<div class="msg err">אירוע לא נמצא</div>';return}
-  editorState={event:ev.data,inputs:(ins.data||[]).map(x=>({...x,input_type:Array.isArray(x.input_types)?x.input_types[0]:x.input_types})),output:out.data,types:types.data||[],templates:templates.data||[]};
+  editorState={event:ev.data,inputs:(ins.data||[]).map(x=>({...x,input_type:Array.isArray(x.input_types)?x.input_types[0]:x.input_types})),output:out.data,types:types.data||[],templates:(templates.data||[]).filter(t=>!t.organization_id||t.organization_id===ev.data.organization_id)};
   step=1;renderEditor()
 }
 
@@ -213,7 +215,13 @@ function renderEditor(){
     <div class="step ${step===1?'active':''}" data-pane="1"><div class="row"><div class="field grow"><label class="label">שם פנימי</label><input class="input" id="name" value="${esc(e.name)}"></div><div class="field grow"><label class="label">סוג אירוע</label><select class="select" id="eventType">${typeOptions}</select></div></div><div class="field"><label class="label">כותרת לאורחים</label><input class="input" id="title" value="${esc(e.title)}"></div><div class="field"><label class="label">תיאור</label><textarea class="textarea" id="description">${esc(e.description||'')}</textarea></div><div class="field"><label class="label">תאריך אירוע</label><input class="input" type="date" id="eventDate" value="${esc(e.event_date||'')}"></div></div>
     <div class="step ${step===2?'active':''}" data-pane="2"><div class="row"><div class="field grow"><label class="label">פתיחת שליחות</label><input class="input" type="datetime-local" id="startAt" value="${localInputValue(e.submission_start_at)}"></div><div class="field grow"><label class="label">סגירת שליחות</label><input class="input" type="datetime-local" id="endAt" value="${localInputValue(e.submission_end_at)}"></div></div><div class="field"><label class="label">כתובת האירוע</label><div class="row"><span class="small" style="padding-top:12px">/e/</span><input class="input grow" id="slug" value="${esc(e.slug)}"></div><span class="help">אותיות באנגלית, מספרים ומקפים בלבד.</span></div></div>
     <div class="step ${step===3?'active':''}" data-pane="3"><p class="small">שם אורח נשאר חובה. וידאו וציור שמורים במודל אך יופעלו בגרסה הבאה.</p>${inputRows}</div>
-    <div class="step ${step===4?'active':''}" data-pane="4"><h2>כרטיסי ברכה לאורחים</h2><p class="small">לאחר שליחה האורח ירכיב כרטיס אישי, יבחר גרסה וישמור קישור פרטי. ספר דיגיטלי ואישור מנהל יטופלו בנפרד.</p><div class="field"><label class="label">מכסת ניסיונות עיצוב (1–20)</label><input class="input" type="number" id="maxAttempts" min="1" max="20" value="${Number(editorState.output?.max_design_attempts||4)}"><span class="help">יצירת כרטיס ראשון ו״נסה עיצוב אחר״ צורכים ניסיון; תיקונים אינם צורכים ניסיון.</span></div><div class="field"><label class="label">עיצובים מותרים באירוע</label>${editorState.templates.map(t=>`<label class="switchrow"><span>${esc(t.name)}</span><input type="checkbox" data-template="${esc(t.id)}" ${editorState.output?.card_template_ids?.includes(t.id)?'checked':''}></label>`).join('')}<span class="help">חייב להישאר לפחות עיצוב אחד. העיצוב הראשון שייבחר ישמש ברירת מחדל.</span></div><div class="field"><label class="label">המלצת AI ועוזר כתיבה</label><div class="msg">כעת פועל Renderer דטרמיניסטי. ה־AI עדיין לא מחובר; הוא לא משנה תמונות או מלל.</div></div></div>
+    <div class="step ${step===4?'active':''}" data-pane="4"><h2>כרטיסי ברכה לאורחים</h2><p class="small">לאחר שליחה האורח ירכיב כרטיס אישי, יבחר גרסה וישמור קישור פרטי. ספר דיגיטלי ואישור מנהל יטופלו בנפרד.</p><div class="field"><label class="label">מכסת ניסיונות עיצוב (1–20)</label><input class="input" type="number" id="maxAttempts" min="1" max="20" value="${Number(editorState.output?.max_design_attempts||4)}"><span class="help">יצירת כרטיס ראשון ו״נסה עיצוב אחר״ צורכים ניסיון; תיקונים אינם צורכים ניסיון.</span></div><div class="field"><label class="label">עיצובים מותרים באירוע</label><p class="small">יצירת טמפלייטים נמצאת בספרייה המרכזית. כאן בוחרים לכל אירוע אילו שילובים ה־AI יוכל להציע לאורח.</p>
+${editorState.templates.map(t=>`<div class="card-edit-panel"><label class="switchrow"><strong>${esc(t.name)}</strong><input type="checkbox" data-template="${esc(t.id)}" ${editorState.output?.card_template_ids?.includes(t.id)?'checked':''}></label>
+<div class="small">ערכות צבעים</div>${Object.entries(t.palettes).map(([id,p])=>`<label class="switchrow"><span>${esc(p.label||id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="palettes" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.palettes||Object.keys(t.palettes)).includes(id)?'checked':''}></label>`).join('')}
+<div class="small">מסגרות</div>${t.frame_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="frames" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.frames||t.frame_options).includes(id)?'checked':''}></label>`).join('')}
+<div class="small">עיטורים</div>${t.pattern_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="patterns" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.patterns||t.pattern_options).includes(id)?'checked':''}></label>`).join('')}
+<div class="small">גופנים</div>${t.typography_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="typography" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.typography||t.typography_options).includes(id)?'checked':''}></label>`).join('')}</div>`).join('')}
+<span class="help">חייב להישאר לפחות טמפלייט אחד וכל אחת מקבוצות האפשרויות שבו. הטמפלייט הראשון שנבחר יהיה ברירת המחדל.</span></div><div class="field"><label class="label">המלצת AI ועוזר כתיבה</label><div class="msg">כעת פועל Renderer דטרמיניסטי. ה־AI עדיין לא מחובר; הוא לא משנה תמונות או מלל.</div></div></div>
     <div class="step ${step===5?'active':''}" data-pane="5"><div class="preview"><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span><h2>${esc(e.title)}</h2><p>${esc(e.description||'')}</p><p class="small">מצב: ${esc(eventOpenState(e)||'טיוטה')}</p><p class="small event-link">${esc(guestUrl(e.slug))}</p><div id="qr" class="qrbox"></div><div class="row" style="margin-top:14px"><button class="btn secondary" id="copyGuestLink">העתקת קישור</button><button class="btn secondary" id="downloadQr">הורדת QR</button><button class="btn secondary" id="previewGuest">פתיחת עמוד אורחים</button></div></div><div id="publishMsg" style="margin-top:14px"></div></div>
     <div class="actions"><button class="btn secondary" id="prev" ${step===1?'disabled':''}>הקודם</button><div class="row"><button class="btn secondary" id="save">שמירה</button>${step===5?`<button class="btn" id="publish">${e.status==='published'?'שמירה ופרסום מחדש':'פרסום האירוע'}</button>`:`<button class="btn" id="next">הבא</button>`}</div></div>
   </div></section>`;
@@ -253,7 +261,20 @@ async function saveEditor(){
     const max=Number(document.getElementById('maxAttempts').value);
     if(!ids.length){alert('יש לבחור לפחות עיצוב אחד');return false}
     if(!Number.isInteger(max)||max<1||max>20){alert('יש לבחור בין ניסיון אחד לעשרים');return false}
-    const patch={card_template_ids:ids,card_default_template_id:ids[0],max_design_attempts:max,
+    const rules={};
+    for(const id of ids){
+      const t=editorState.templates.find(x=>x.id===id);
+      if(!t){alert('עיצוב לא נמצא בספרייה');return false}
+      const limits={palettes:Object.keys(t.palettes),frames:t.frame_options,patterns:t.pattern_options,typography:t.typography_options};
+      const perTemplate={};
+      for(const [kind,all] of Object.entries(limits)){
+        const vals=[...document.querySelectorAll('[data-rule="'+id+'"][data-kind="'+kind+'"]:checked')].map(x=>x.value);
+        if(!vals.length||vals.some(x=>!all.includes(x))){alert('יש להשאיר לפחות אפשרות אחת בכל קבוצה של '+t.name);return false}
+        perTemplate[kind]=vals;
+      }
+      rules[id]=perTemplate;
+    }
+    const patch={card_template_ids:ids,card_default_template_id:ids[0],card_design_rules:rules,max_design_attempts:max,
       post_submission_mode:'confirmation',generation_mode:'none',updated_at:new Date().toISOString()};
     const {error}=await supabase.from('event_output_config').update(patch).eq('event_id',e.id);
     if(error){alert(error.message);return false}Object.assign(editorState.output,patch);
@@ -332,6 +353,7 @@ async function route(){
   if(path==='/manager'){await renderDashboard();return}
   if(path==='/manager/team'){await renderTeam();return}
   if(path==='/manager/settings'){await renderOrgSettings();return}
+  if(path==='/manager/designs'){const ctx=await requireOrg();if(ctx)await renderDesignLibrary({app,supabase,ctx,go});return}
   const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
   const em=path.match(/^\/manager\/event\/([0-9a-f-]{36})$/i);if(em){await loadEditor(em[1]);return}
   const pc=path.match(/^\/card\/([0-9a-f]{64})$/i);if(pc){await renderGuestCardPage({token:pc[1],app,api:CARD_API,go});return}
