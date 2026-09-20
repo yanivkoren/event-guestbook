@@ -1,148 +1,125 @@
 import {defaultDesign,renderCardPages} from '/guest-card-renderer.js';
 
 const escape=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const categories={wedding:'חתונה',celebration:'חגיגה',modern:'מודרני',birthday:'יום הולדת',other:'כללי'};
-const frames={rounded_gold:'מסגרת מודגשת',thin:'מסגרת עדינה',none:'ללא'};
-const patterns={botanical:'צמחי',modern:'מודרני',confetti:'קונפטי',none:'ללא'};
-const fonts={hebrew_clean:'עברית נקייה',hebrew_classic:'עברית קלאסית'};
-const fields=[['background','רקע'],['text','טקסט'],['accent','הדגשה'],['accent2','עיטור']];
 const copy=x=>JSON.parse(JSON.stringify(x));
-const optionLine=(group,id,label,checked)=>'<label class="switchrow"><span>'+escape(label)+'</span><input type="checkbox" data-option="'+group+'" value="'+escape(id)+'" '+(checked?'checked':'')+'></label>';
-const getNumber=(root,id,min,max)=>{const n=Number(root.querySelector('#'+id)?.value);if(!Number.isFinite(n)||n<min||n>max)throw Error('ערך לא תקין: '+id);return n};
+const titles={layout:'מבני כרטיס',palette:'פלטות צבע',pattern:'עיטורים',font_set:'שילובי גופנים'};
+const labels={layout:'מבנה כרטיס',palette:'פלטת צבע',pattern:'עיטור',font_set:'שילוב גופנים'};
+const colors=[['background','רקע'],['text','טקסט'],['accent','הדגשה'],['accent2','צבע עיטור']];
 const cleanId=x=>String(x||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,55);
+const validColor=x=>/^#[0-9a-f]{6}$/i.test(x||'');
+const options=(items,chosen)=>items.map(([value,label])=>'<option value="'+escape(value)+'" '+(value===chosen?'selected':'')+'>'+escape(label)+'</option>').join('');
 export async function renderDesignLibrary({app,supabase,ctx,go}){
  if(ctx.member.role!=='super_admin'){go('/manager');return}
- app.className='wrap';app.innerHTML='<div class="loading">טוען ספריית עיצובים…</div>';
- let templates=[],selected=null,mode='list',message='',previewRevision=0;
+ let components=[],kind='layout',current=null,previewSeq=0;
+ const org=ctx.member.organization_id;
  async function reload(){
-  const {data,error}=await supabase.from('card_templates').select('*').or('organization_id.is.null,organization_id.eq.'+ctx.member.organization_id).order('name');
+  const {data,error}=await supabase.from('design_components').select('*').or('organization_id.is.null,organization_id.eq.'+org).order('name');
   if(error)throw Error(error.message);
-  templates=data||[];
+  components=data||[];
  }
- function feedback(text,isError=false){message=text;const el=app.querySelector('#designFeedback');if(el){el.textContent=text;el.className=isError?'msg err':'msg ok'}}
+ const info=(msg,bad=false)=>{const el=app.querySelector('#componentFeedback');if(el){el.textContent=msg;el.className=bad?'msg err':'msg ok'}};
  function list(){
-  mode='list';app.className='wrap';app.innerHTML='<div class="top"><div><button class="btn secondary" id="designBack">← לאירועים</button><h1>ספריית עיצובים</h1><p class="small">כאן מנהלים טמפלייטים לארגון. עיצובי הבסיס נשמרים כתבניות מקור; אפשר לשכפל ולערוך עותק משלך.</p></div><button class="btn" id="addTemplate">+ טמפלייט חדש</button></div><div id="designFeedback" role="status" aria-live="polite"></div><div class="grid">'+templates.map(t=>'<article class="event-card"><div class="row" style="justify-content:space-between"><h3>'+escape(t.name)+'</h3><span class="badge">'+(t.organization_id?'של הארגון':'עיצוב בסיס')+'</span></div><p class="small">'+escape(t.description||categories[t.category]||t.category)+'</p><div class="small">'+Object.keys(t.palettes).length+' צבעים · '+t.frame_options.length+' מסגרות · '+t.pattern_options.length+' עיטורים</div><div class="row" style="margin-top:16px"><button class="btn secondary" data-open="'+escape(t.id)+'">'+(t.organization_id?'עריכה ותצוגה':'תצוגה ושכפול')+'</button></div></article>').join('')+'</div>';
-  app.querySelector('#designBack').onclick=()=>go('/manager');
-  app.querySelector('#addTemplate').onclick=()=>openEditor(null);
-  app.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>openEditor(templates.find(t=>t.id===button.dataset.open)));
+  current=null;app.className='wrap';
+  app.innerHTML='<div class="top"><div><button class="btn secondary" id="libraryBack">← לאירועים</button><h1>ספריות רכיבי עיצוב</h1><p class="small">ארבע ספריות נפרדות. מנהל האירוע בוחר מבנים, צבעים, עיטורים וגופנים באופן עצמאי.</p></div><button class="btn" id="addComponent">+ רכיב חדש</button></div><div id="componentFeedback" role="status"></div><div class="tabs">'+Object.entries(titles).map(([key,name])=>'<button class="tab '+(kind===key?'active':'')+'" data-kind="'+key+'">'+name+'</button>').join('')+'</div><div class="grid">'+components.filter(c=>c.kind===kind).map(c=>'<article class="event-card"><div class="row" style="justify-content:space-between"><h3>'+escape(c.name)+'</h3><span class="badge">'+(c.organization_id?'של הארגון':'רכיב בסיס')+'</span></div><p class="small">גרסה '+c.revision+' · '+(c.active?'פעיל':'מושבת')+'</p>'+(kind==='palette'?'<div class="row">'+colors.map(([key])=>'<span title="'+key+'" style="display:inline-block;width:40px;height:40px;border:1px solid #ddd;border-radius:10px;background:'+escape(c.config[key]||'#fff')+'"></span>').join('')+'</div>':'')+(kind==='pattern'&&c.config?.asset_url?'<img class="thumb" alt="עיטור" src="'+escape(c.config.asset_url)+'" style="max-height:90px;object-fit:contain">':'')+'<div class="row" style="margin-top:15px"><button class="btn secondary" data-open="'+escape(c.id)+'">'+(c.organization_id?'עריכה':'צפייה ושכפול')+'</button></div></article>').join('')+'</div>';
+  app.querySelector('#libraryBack').onclick=()=>go('/manager');
+  app.querySelector('#addComponent').onclick=()=>edit(null);
+  app.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{kind=b.dataset.kind;list()});
+  app.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>edit(components.find(c=>c.id===b.dataset.open)));
  }
- function starter(){
-  const t=templates.find(t=>t.active)||templates[0];
-  if(!t)throw Error('לא קיימת תבנית בסיס');
-  const result=copy(t);
-  result.id='';result.name='';result.description='';result.active=false;
-  result.organization_id=ctx.member.organization_id;
-  return result;
+ function newItem(){
+  const base=components.find(c=>c.kind===kind&&c.active);
+  if(!base)throw Error('אין רכיב בסיס בספרייה');
+  return {...copy(base),id:'',name:'',organization_id:org,revision:1,active:true};
  }
- function renderPalette(t){
-  return Object.entries(t.palettes).map(([id,p])=>'<fieldset class="card-edit-panel" data-palette="'+escape(id)+'"><legend>ערכת צבעים · '+escape(id)+'</legend><div class="field"><label class="label">שם התצוגה</label><input class="input" data-palette-label value="'+escape(p.label||id)+'" maxlength="45"></div><div class="row">'+fields.map(([key,label])=>'<div class="field grow"><label class="label">'+label+'</label><input type="color" data-color="'+key+'" value="'+escape(p[key]||'#ffffff')+'"></div>').join('')+'</div><button class="btn secondary" data-remove-palette="'+escape(id)+'">הסר ערכה</button></fieldset>').join('');
+ function paletteInputs(conf){
+  return '<div class="row">'+colors.map(([key,label])=>'<div class="field grow"><label class="label">'+label+'</label><input type="color" class="input" data-color="'+key+'" value="'+escape(conf[key]||'#ffffff')+'"></div>').join('')+'</div>';
  }
- function inputSection(t){
-  const sizes=[['title','כותרת'],['name','שם'],['emoji','תגובה']];
-  const pos=t.layout.photo||{};
-  return '<h3>מבנה ו־Layouts</h3><p class="small">הכרטיס כולל את כל התוכן שהאורח מסר. לכרטיס ללא תמונה או עם מלל ארוך יש Layout נפרד; ברכה שלא נכנסת ממשיכה לעמוד נוסף.</p>'+
-   '<div class="row">'+sizes.map(([id,label])=>'<div class="field grow"><label class="label">'+label+' — גודל גופן</label><input class="input" type="number" id="size_'+id+'" min="20" max="80" value="'+escape(t.layout[id]?.size||40)+'"></div>').join('')+'</div>'+
-   '<h4>מיקום התמונה בכרטיס</h4><div class="row">'+[['x',0,850],['y',60,950],['w',160,1000],['h',160,1000]].map(([k,min,max])=>'<div class="field grow"><label class="label">'+({x:'X',y:'Y',w:'רוחב',h:'גובה'}[k])+'</label><input class="input" id="photo_'+k+'" type="number" min="'+min+'" max="'+max+'" value="'+escape(pos[k]||0)+'"></div>').join('')+'</div>'+
-   '<div class="field"><label class="label">צורת תמונה</label><select id="photoShape" class="select"><option value="rounded" '+(pos.shape!=='ellipse'?'selected':'')+'>מלבן מעוגל</option><option value="ellipse" '+(pos.shape==='ellipse'?'selected':'')+'>אליפסה</option></select></div>'+
-   '<h4>מקום להודעה — לפי סוג התוכן</h4>'+
-   ['photo','no_photo','photo_long','no_photo_long'].map(k=>'<div class="row"><strong class="grow">'+escape({photo:'עם תמונה',no_photo:'ללא תמונה',photo_long:'עם תמונה וברכה ארוכה',no_photo_long:'ללא תמונה וברכה ארוכה'}[k])+'</strong><div class="field grow"><label class="label">תחילת טקסט (px)</label><input class="input" type="number" data-variant="'+k+'" data-bound="message_top" min="180" max="1190" value="'+escape(t.layout_variants?.[k]?.message_top??(k.startsWith('no_')?332:t.layout.message.top))+'"></div><div class="field grow"><label class="label">סיום טקסט (px)</label><input class="input" type="number" data-variant="'+k+'" data-bound="message_bottom" min="250" max="1250" value="'+escape(t.layout_variants?.[k]?.message_bottom??(k.includes('long')?1200:t.layout.message.bottom))+'"></div></div>').join('')+
-   '<div class="field"><label class="label">קובץ עיטור PNG (אופציונלי, עד 2MB)</label><input id="designAsset" type="file" accept="image/png"><p class="small">עיטור יופיע בפינות הכרטיס בלבד, לא במקום התמונה או המלל של האורח.</p></div>';
+ function layoutInputs(conf){
+  const p=conf.layout?.photo||{},m=conf.layout?.message||{};
+  const fields=[['photo_x','תמונה X',p.x,0,850],['photo_y','תמונה Y',p.y,60,950],['photo_w','רוחב תמונה',p.w,160,1000],['photo_h','גובה תמונה',p.h,160,1000],['title_y','כותרת Y',conf.layout?.title?.y,60,600],['name_y','שם Y',conf.layout?.name?.y,100,1190],['message_top','תחילת ברכה',m.top,180,1190],['message_bottom','סיום ברכה',m.bottom,250,1250],['message_size','גודל ברכה',m.size,22,36]];
+  return '<p class="small">מיקום האזורים בקנבס 1080×1350. הגדרות ברכה ארוכה נשמרות במבנה.</p><div class="row">'+fields.map(([key,label,v,min,max])=>'<div class="field grow"><label class="label">'+label+'</label><input class="input" data-layout="'+key+'" type="number" min="'+min+'" max="'+max+'" value="'+escape(v??0)+'"></div>').join('')+'</div><div class="field"><label class="label">צורת תמונה</label><select id="photoShape" class="select">'+options([['rounded','מלבן מעוגל'],['ellipse','אליפסה']],p.shape)+'</select></div>';
  }
- function openEditor(source){
-  selected=source?copy(source):starter();mode=source?.organization_id?'edit':'create';
-  const t=selected,readOnly=!!source&&!source.organization_id;
-  app.className='wrap';app.innerHTML='<div class="top"><div><button class="btn secondary" id="backLibrary">← לספרייה</button><h1>'+escape(readOnly?'צפייה בטמפלייט בסיס':mode==='edit'?'עריכת טמפלייט':'טמפלייט חדש')+'</h1></div></div>'+
-   '<div id="designFeedback" role="status" aria-live="polite"></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr))"><section class="card"><div class="content"><div class="field"><label class="label">שם הטמפלייט</label><input class="input" id="templateName" value="'+escape(t.name)+'" maxlength="120"></div>'+
-   '<div class="field"><label class="label">תיאור</label><textarea class="textarea" id="templateDescription" maxlength="400">'+escape(t.description||'')+'</textarea></div>'+
-   '<div class="field"><label class="label">סוג</label><select class="select" id="templateCategory">'+Object.entries(categories).map(([id,label])=>'<option value="'+id+'" '+(id===t.category?'selected':'')+'>'+label+'</option>').join('')+'</select></div>'+
-   '<h3>ערכות צבעים</h3><div id="paletteEditors">'+renderPalette(t)+'</div><button class="btn secondary" id="addPalette">+ ערכת צבעים</button>'+
-   '<h3>אפשרויות בעיצוב</h3>'+Object.entries({frame_options:frames,pattern_options:patterns,typography_options:fonts}).map(([group,labels])=>'<h4>'+({frame_options:'מסגרות',pattern_options:'עיטורים',typography_options:'גופנים'}[group])+'</h4>'+Object.entries(labels).map(([id,label])=>optionLine(group,id,label,t[group].includes(id))).join('')).join('')+
-   inputSection(t)+
-   '<div class="field"><label><input type="checkbox" id="templateActive" '+(t.active?'checked':'')+'> פעיל לבחירה באירועים</label></div>'+
-   '<div class="actions"><button class="btn secondary" id="previewTemplate">תצוגה מקדימה</button><button class="btn" id="saveTemplate">'+(readOnly?'שכפל וערוך':'שמור טמפלייט')+'</button></div></div></section>'+
-   '<section class="card"><div class="content"><h2>תצוגה מקדימה</h2><p class="small">ברכה להדגמה ללא תמונה; תצוגת התמונה תישמר בגרסאות האירוע.</p><div id="templatePreview" class="personal-card-image"></div></div></section></div>';
+ function patternInputs(conf){
+  return '<div class="field"><label class="label">צורת עיטור</label><select class="select" id="rendererPattern">'+options([['botanical','צמחי'],['modern','מודרני'],['confetti','קונפטי'],['none','ללא']],conf.renderer_id||'none')+'</select></div><div class="field"><label class="label">עיטור PNG שקוף (אופציונלי, עד 2MB)</label><input id="patternPng" type="file" accept="image/png"><p class="small">הקובץ משויך לעיטור הזה בלבד ויוצג בפינות כדי לא לכסות תמונה או ברכה.</p></div>'+(conf.asset_url?'<img class="thumb" style="max-height:130px;object-fit:contain" src="'+escape(conf.asset_url)+'" alt="עיטור קיים">':'');
+ }
+ function editorMarkup(item,readOnly){
+  const conf=item.config||{};
+  return '<div class="top"><div><button class="btn secondary" id="backLibrary">← לספריות</button><h1>'+escape(readOnly?'צפייה ברכיב בסיס':item.id?'עריכת '+labels[kind]:'רכיב חדש: '+labels[kind])+'</h1></div></div><div id="componentFeedback" role="status"></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr))"><section class="card"><div class="content"><div class="field"><label class="label">שם הרכיב</label><input class="input" id="componentName" maxlength="120" value="'+escape(item.name)+'"></div>'+
+   (kind==='palette'?paletteInputs(conf):kind==='layout'?layoutInputs(conf):kind==='pattern'?patternInputs(conf):
+    '<div class="field"><label class="label">משפחת גופנים</label><select class="select" id="rendererFont">'+options([['hebrew_clean','עברית נקייה'],['hebrew_classic','עברית קלאסית']],conf.renderer_id||'hebrew_clean')+'</select><p class="small">אפשר להרחיב בהמשך את מנוע הרינדור לגופנים נוספים בעברית.</p></div>')+
+   '<label class="switchrow"><span>פעיל לבחירה באירועים</span><input type="checkbox" id="componentActive" '+(item.active?'checked':'')+'></label><div class="actions"><button class="btn secondary" id="previewComponent">תצוגה מקדימה</button><button class="btn" id="saveComponent">'+(readOnly?'שכפל לרכיב חדש':'שמור רכיב')+'</button></div></div></section><section class="card"><div class="content"><h2>תצוגה מקדימה</h2><div id="componentPreview" class="personal-card-image"></div></div></section></div>';
+ }
+ function draft(item){
+  const conf=copy(item.config||{});
+  const name=app.querySelector('#componentName').value.trim();
+  if(name.length<2)throw Error('יש לתת שם לרכיב');
+  if(kind==='palette'){
+   for(const [key] of colors){const v=app.querySelector('[data-color="'+key+'"]').value;if(!validColor(v))throw Error('צבע לא תקין');conf[key]=v}
+   conf.label=name;
+  }else if(kind==='layout'){
+   const v={};for(const field of app.querySelectorAll('[data-layout]')){const num=Number(field.value);if(!Number.isFinite(num)||num<Number(field.min)||num>Number(field.max))throw Error('מיקום או גודל לא תקין');v[field.dataset.layout]=num}
+   if(v.photo_x+v.photo_w>1050||v.photo_y+v.photo_h>1130)throw Error('התמונה חורגת מגבולות הכרטיס');
+   if(v.message_bottom-v.message_top<100)throw Error('יש להשאיר לפחות 100px לברכה');
+   conf.layout.photo={...conf.layout.photo,x:v.photo_x,y:v.photo_y,w:v.photo_w,h:v.photo_h,shape:app.querySelector('#photoShape').value};
+   conf.layout.title={...conf.layout.title,y:v.title_y};
+   conf.layout.name={...conf.layout.name,y:v.name_y};
+   conf.layout.message={...conf.layout.message,top:v.message_top,bottom:v.message_bottom,size:v.message_size};
+   conf.layout_variants=conf.layout_variants||{};
+   conf.layout_variants.photo={message_top:v.message_top,message_bottom:v.message_bottom};
+   conf.layout_variants.photo_long={message_top:v.message_top,message_bottom:Math.max(v.message_bottom,1200)};
+  }else if(kind==='pattern')conf.renderer_id=app.querySelector('#rendererPattern').value;
+  else conf.renderer_id=app.querySelector('#rendererFont').value;
+  return {...item,name,config:conf,active:app.querySelector('#componentActive').checked};
+ }
+ async function preview(item){
+  const area=app.querySelector('#componentPreview'),rev=++previewSeq;if(!area)return;
+  area.innerHTML='<div class="loading">מכין תצוגה…</div>';
+  try{
+   const edited=draft(item);
+   const byKind=k=>components.find(c=>c.kind===k&&c.active);
+   const layout=(kind==='layout'?edited:byKind('layout'))?.config;
+   const palette=(kind==='palette'?edited:byKind('palette'))?.config;
+   const pattern=(kind==='pattern'?edited:byKind('pattern'))?.config;
+   const font=(kind==='font_set'?edited:byKind('font_set'))?.config;
+   if(!layout||!palette||!pattern||!font)throw Error('חסר רכיב לתצוגה');
+   const patternId=pattern.renderer_id||'none',fontId=font.renderer_id||'hebrew_clean';
+   const design={template_id:'preview',palette:'preview',pattern_id:patternId,typography_id:fontId,frame:'thin',crop_strategy:'center',photo_position:'center',crop_x:.5,crop_y:.5};
+   const t={id:'preview',active:true,layout:layout.layout,layout_variants:layout.layout_variants,palettes:{preview:palette},pattern_options:[patternId],typography_options:[fontId],frame_options:['thin'],crop_strategies:['center'],photo_positions:['center'],pattern_asset_urls:pattern.asset_url?{[patternId]:pattern.asset_url}:{}};
+   const pages=await renderCardPages({template:t,design,content:{title:'שמחה גדולה',name:'משפחת ישראלי',message:'המון אהבה, שמחה ורגעים טובים. תודה שאתם איתנו ביום המיוחד!',emoji:'❤️'},image:null});
+   if(rev!==previewSeq)return;area.innerHTML='';for(const canvas of pages){canvas.className='card-preview';area.appendChild(canvas)}
+  }catch(e){if(rev===previewSeq)area.innerHTML='<div class="msg err">'+escape(e.message)+'</div>'}
+ }
+ function edit(source){
+  current=source?copy(source):newItem();const readOnly=!!source&&!source.organization_id;
+  app.className='wrap';app.innerHTML=editorMarkup(current,readOnly);
   app.querySelector('#backLibrary').onclick=list;
-  app.querySelector('#addPalette').onclick=()=>{const input=prompt('מזהה ערכת צבעים באנגלית (למשל sunrise):');if(!input)return;const id=cleanId(input);if(id.length<2||t.palettes[id]){feedback('מזהה לא תקין או כבר קיים',true);return}t.palettes[id]={label:input,background:'#fff8f1',text:'#302c34',accent:'#956b73',accent2:'#d8b9a0'};app.querySelector('#paletteEditors').innerHTML=renderPalette(t);bindPaletteRemovals()};
-  function bindPaletteRemovals(){app.querySelectorAll('[data-remove-palette]').forEach(b=>b.onclick=()=>{if(Object.keys(t.palettes).length<=1){feedback('חייבת להישאר לפחות ערכת צבעים אחת',true);return}delete t.palettes[b.dataset.removePalette];app.querySelector('#paletteEditors').innerHTML=renderPalette(t);bindPaletteRemovals()})}
-  bindPaletteRemovals();
-  app.querySelector('#previewTemplate').onclick=()=>preview(t);
-  app.querySelector('#saveTemplate').onclick=()=>save(t,readOnly);
-  preview(t);
+  app.querySelector('#previewComponent').onclick=()=>preview(current);
+  app.querySelector('#saveComponent').onclick=()=>save(current,readOnly);
+  if(kind!=='pattern'||!current.config?.asset_url)preview(current);
  }
- function draft(t){
-  const result=copy(t),root=app;
-  result.name=root.querySelector('#templateName').value.trim();
-  result.description=root.querySelector('#templateDescription').value.trim();
-  result.category=root.querySelector('#templateCategory').value;
-  result.active=root.querySelector('#templateActive').checked;
-  if(result.name.length<2)throw Error('צריך שם לטמפלייט');
-  for(const group of ['frame_options','pattern_options','typography_options']){
-   result[group]=[...root.querySelectorAll('[data-option="'+group+'"]:checked')].map(x=>x.value);
-   if(!result[group].length)throw Error('צריך לבחור אפשרות אחת לפחות בכל קבוצת עיצוב');
-  }
-  for(const block of root.querySelectorAll('[data-palette]')){
-   const id=block.dataset.palette;
-   result.palettes[id]={...result.palettes[id],label:block.querySelector('[data-palette-label]').value.trim()};
-   for(const input of block.querySelectorAll('[data-color]'))result.palettes[id][input.dataset.color]=input.value;
-  }
-  if(!Object.keys(result.palettes).length)throw Error('נדרשת לפחות ערכת צבעים אחת');
-  result.layout.title.size=getNumber(root,'size_title',20,80);
-  result.layout.name.size=getNumber(root,'size_name',20,80);
-  result.layout.emoji.size=getNumber(root,'size_emoji',20,80);
-  for(const [key,min,max] of [['x',0,850],['y',60,950],['w',160,1000],['h',160,1000]]){
-   result.layout.photo[key]=getNumber(root,'photo_'+key,min,max);
-  }
-  if(result.layout.photo.x+result.layout.photo.w>1050||result.layout.photo.y+result.layout.photo.h>1130)
-   throw Error('התמונה חורגת משטח הכרטיס');
-  result.layout.photo.shape=root.querySelector('#photoShape').value;
-  result.layout_variants={};
-  for(const key of ['photo','no_photo','photo_long','no_photo_long']){
-   const top=Number(root.querySelector('[data-variant="'+key+'"][data-bound="message_top"]').value);
-   const bottom=Number(root.querySelector('[data-variant="'+key+'"][data-bound="message_bottom"]').value);
-   if(!Number.isFinite(top)||!Number.isFinite(bottom)||top<180||bottom>1250||bottom-top<100)
-    throw Error('יש להשאיר לפחות 100px למלל בכל Layout');
-   result.layout_variants[key]={message_top:top,message_bottom:bottom};
-  }
-  return result;
- }
- async function preview(t){
-  const revision=++previewRevision,area=app.querySelector('#templatePreview');
-  if(!area)return;area.innerHTML='<div class="loading">מכין תצוגה…</div>';
+ async function save(item,readOnly){
+  const btn=app.querySelector('#saveComponent');btn.disabled=true;
   try{
-   const draftTemplate=draft(t),design=defaultDesign({...draftTemplate,active:true});
-   const pages=await renderCardPages({template:{...draftTemplate,active:true},design,content:{title:'שמחה גדולה',name:'משפחת ישראלי',message:'המון אהבה, שמחה, אושר ורגעים יפים. שהיום הזה יישאר בלב לתמיד!',emoji:'❤️',reaction_label:'אוהבים אתכם'},image:null});
-   if(revision!==previewRevision)return;
-   area.innerHTML='';pages.forEach(canvas=>{canvas.className='card-preview';area.appendChild(canvas)});
-  }catch(err){if(revision===previewRevision)area.innerHTML='<div class="msg err">'+escape(err.message)+'</div>'}
- }
- async function save(t,readOnly){
-  const btn=app.querySelector('#saveTemplate');btn.disabled=true;
-  try{
-   let payload=draft(t),existing=!readOnly&&mode==='edit';
-   if(!existing){
-    const id='org_'+crypto.randomUUID().replace(/-/g,'').slice(0,24);
-    payload={...payload,id,organization_id:ctx.member.organization_id,revision:1,active:payload.active};
-   }else payload.revision=(t.revision||1)+1;
-   const asset=app.querySelector('#designAsset')?.files?.[0];
-   if(asset){
-    if(asset.type!=='image/png'||asset.size>2*1024*1024)throw Error('קובץ העיטור חייב להיות PNG עד 2MB');
-    const path=ctx.member.organization_id+'/'+payload.id+'/'+crypto.randomUUID()+'.png';
-    const uploaded=await supabase.storage.from('design-assets').upload(path,asset,{contentType:'image/png',upsert:false});
-    if(uploaded.error)throw Error(uploaded.error.message);
-    payload.decorative_asset_url=supabase.storage.from('design-assets').getPublicUrl(path).data.publicUrl;
+   const edited=draft(item),existing=!!item.id&&!readOnly;
+   const id=existing?item.id:'org_'+kind+'_'+crypto.randomUUID().replace(/-/g,'').slice(0,24);
+   const config=edited.config;
+   if(kind==='pattern'){
+    const file=app.querySelector('#patternPng')?.files?.[0];
+    if(file){
+     if(file.type!=='image/png'||file.size>2*1024*1024)throw Error('יש לבחור PNG עד 2MB');
+     const path=org+'/'+id+'/'+crypto.randomUUID()+'.png';
+     const uploaded=await supabase.storage.from('design-assets').upload(path,file,{contentType:'image/png',upsert:false});
+     if(uploaded.error)throw Error(uploaded.error.message);
+     config.asset_url=supabase.storage.from('design-assets').getPublicUrl(path).data.publicUrl;
+    }
    }
-   const columns=['id','organization_id','name','description','category','active','revision','layout','layout_variants','palettes','frame_options','crop_strategies','photo_positions','pattern_options','typography_options','decorative_asset_url'];
-   const record=Object.fromEntries(columns.map(k=>[k,payload[k]]));
-   if(existing){delete record.id;delete record.organization_id;
-    const result=await supabase.from('card_templates').update({...record,updated_at:new Date().toISOString()}).eq('id',t.id).eq('organization_id',ctx.member.organization_id).select('id').single();
-    if(result.error)throw Error(result.error.message);
-   }else{
-    const result=await supabase.from('card_templates').insert(record).select('id').single();
-    if(result.error)throw Error(result.error.message);
-   }
-   await reload();selected=templates.find(x=>x.id===payload.id);
-   list();feedback('הטמפלייט נשמר. אפשר כעת לבחור אותו בהגדרות העיצוב של אירוע.');
-  }catch(err){feedback(err.message,true)}finally{if(btn.isConnected)btn.disabled=false}
+   const payload={name:edited.name,kind,active:edited.active,config,revision:existing?(item.revision||1)+1:1,updated_at:new Date().toISOString()};
+   let error;
+   if(existing){({error}=await supabase.from('design_components').update(payload).eq('id',item.id).eq('organization_id',org))}
+   else({error}=await supabase.from('design_components').insert({...payload,id,organization_id:org}));
+   if(error)throw Error(error.message);
+   await reload();list();info('הרכיב נשמר בספרייה וניתן לבחור בו באירועים.');
+  }catch(e){info(e.message,true)}finally{if(btn.isConnected)btn.disabled=false}
  }
- try{await reload();list()}catch(err){app.innerHTML='<div class="msg err">'+escape(err.message)+'</div>'}
+ try{await reload();list()}catch(e){app.className='wrap';app.innerHTML='<div class="msg err">'+escape(e.message)+'</div>'}
 }
