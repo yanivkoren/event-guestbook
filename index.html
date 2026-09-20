@@ -384,7 +384,7 @@ async function route(){
   if(path==='/manager'){await renderDashboard();return}
   if(path==='/manager/team'){await renderTeam();return}
   if(path==='/manager/settings'){await renderOrgSettings();return}
-  const cm=path.match(/^\\/manager\\/event\\/([0-9a-f-]{36})\\/card\\/([0-9a-f-]{36})$/i);if(cm){await renderCardEditor(cm[1],cm[2]);return}
+  const cm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/card\/([0-9a-f-]{36})$/i);if(cm){await renderCardEditor(cm[1],cm[2]);return}
   const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
   const em=path.match(/^\/manager\/event\/([0-9a-f-]{36})$/i);if(em){await loadEditor(em[1]);return}
   const gm=path.match(/^\/e\/([^/]+)$/);if(gm){await renderGuest(decodeURIComponent(gm[1]));return}
