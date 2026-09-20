@@ -224,6 +224,14 @@ export async function renderGuestCardPage({token,app,api}){
   if(!await refresh())return;
   photo=await loadPhoto(state.photo_url);
   if(!state.versions.length&&canEdit()){await generate('initial',state.original);return}
+  // Restore the submitted reaction label in cards created before labels were rendered.
+  const displayed=visible();
+  const label=(state.reaction_options||[]).find(o=>o.emoji===displayed?.content_snapshot?.emoji)?.label
+   ||(state.original.emoji===displayed?.content_snapshot?.emoji?state.original.reaction_label:'');
+  if(canEdit()&&displayed?.content_snapshot?.emoji&&!displayed.content_snapshot.reaction_label&&label){
+   await generate('edit',{...displayed.content_snapshot,reaction_label:label});
+   return;
+  }
   mount();
  }catch(err){errorScreen(err.message)}
 }
