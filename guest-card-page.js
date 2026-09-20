@@ -121,7 +121,7 @@ export async function renderGuestCardPage({token,app,api,go}){
   app.innerHTML='<section class="card"><div class="content"><h1>כרטיס הברכה שלי ❤️</h1><p class="small">'+esc(data.event.title)+'</p>'+
    (selected?'<div class="msg ok">בחרת גרסה '+selected.version_number+'. הקישור האישי נשאר זהה גם לאחר שינוי הבחירה.</div>':
    '<div class="msg">הכרטיס עדיין לא אושר על ידך. צרו גרסה ובחרו את זו שאהבתם.</div>')+
-   '<div class="msg"><strong>הקישור האישי שלך</strong><p class="small">הקישור מקנה גישה לניהול הברכה; לא שולחים אותו בשיתוף התמונה. שמרו אותו כעת — אין שחזור קישור שאבד.</p><button class="btn secondary" id="copyPersonal">העתקת קישור אישי</button></div>'+
+   '<div class="msg"><strong>'+(selected?'הקישור האישי שלך':'קישור להמשך עריכת הטיוטה')+'</strong><p class="small">הקישור מקנה גישה לניהול הברכה; לא שולחים אותו בשיתוף התמונה. שמרו אותו כעת — אין שחזור קישור שאבד.</p><button class="btn secondary" id="copyPersonal">העתקת קישור</button></div>'+
    (closed?'<div class="msg">חלון העריכה של האירוע הסתיים. אפשר לצפות ולשתף את הכרטיס שנבחר, אך לא לערוך או למחוק אותו בעצמך.</div>':'')+
    '<div id="personalNotice" class="small" aria-live="polite"></div>'+
    '<div class="grid"><div><div id="cardRendered"></div><div class="row" id="storedActions"></div></div>'+
