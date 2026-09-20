@@ -332,9 +332,11 @@ async function renderTeam(){
     const status=m.status==='active'?'פעיל':m.status==='invited'?'מוזמן':'מושבת';
     const role=m.role==='super_admin'?'סופר־מנהל':'מנהל אירועים';
     const canToggle=!self && (m.role!=='super_admin'||m.status!=='active'||activeSupers>1);
+    const canChangeRole=!self && (m.role!=='super_admin'||m.status!=='active'||activeSupers>1);
     return '<div class="member"><div><strong>'+esc(m.display_name||m.email)+'</strong><div class="small">'+esc(m.email)+' · '+status+(self?' · החשבון שלך':'')+'</div></div>'+
      '<div class="row"><span class="role '+(m.role==='super_admin'?'super':'')+'">'+role+'</span>'+
-     (canToggle?'<button class="btn secondary" data-toggle-member="'+m.id+'" data-status="'+m.status+'">'+(m.status==='disabled'?'הפעל מחדש':'השבת')+'</button>':'')+
+     (canChangeRole?'<label class="small" for="role-'+m.id+'">שינוי תפקיד</label><select class="select" style="max-width:160px" data-change-role="'+m.id+'" data-current-role="'+m.role+'" data-email="'+esc(m.email)+'" id="role-'+m.id+'"><option value="event_manager" '+(m.role==='event_manager'?'selected':'')+'>מנהל אירועים</option><option value="super_admin" '+(m.role==='super_admin'?'selected':'')+'>סופר־מנהל</option></select>':'')+
+     (canToggle?'<button class="btn secondary" data-toggle-member="'+m.id+'" data-status="'+m.status+'" data-has-user="'+!!m.user_id+'">'+(m.status==='disabled'?'הפעל מחדש':'השבת')+'</button>':'')+
      '</div></div>';
   }).join('');
   app.innerHTML='<div class="top"><div><button class="btn secondary" id="teamBack">← Dashboard</button><h1>עובדי הארגון</h1><div class="small">רק סופר־מנהל פעיל יכול להזמין סופר־מנהלים נוספים.</div></div></div>'+
@@ -359,14 +361,35 @@ async function renderTeam(){
     if(insertError){box.className='msg err';box.textContent=insertError.code==='23505'?'כתובת האימייל כבר קיימת בארגון.':insertError.message;button.disabled=false;return}
     toast('ההזמנה נשמרה');renderTeam();
   };
+  document.querySelectorAll('[data-change-role]').forEach(select=>select.onchange=async()=>{
+    const previous=select.dataset.currentRole,role=select.value,email=select.dataset.email;
+    if(role===previous)return;
+    const label=role==='super_admin'?'סופר־מנהל':'מנהל אירועים';
+    if(!confirm('לשנות את התפקיד של '+email+' ל'+label+'?'+(role==='super_admin'?' תהיה לו גישה לניהול עובדי הארגון וספריית העיצובים.':''))){
+      select.value=previous;return;
+    }
+    select.disabled=true;
+    const {error:updateError}=await supabase.from('organization_members')
+      .update({role,updated_at:new Date().toISOString()})
+      .eq('id',select.dataset.changeRole).eq('organization_id',ctx.member.organization_id);
+    if(updateError){
+      select.disabled=false;select.value=previous;
+      const box=document.getElementById('teamMessage');box.className='msg err';box.textContent=updateError.message;
+      return;
+    }
+    toast('התפקיד עודכן ל'+label);renderTeam();
+  });
   document.querySelectorAll('[data-toggle-member]').forEach(b=>b.onclick=async()=>{
-    const status=b.dataset.status==='disabled'?'invited':'disabled';
+    const status=b.dataset.status==='disabled'?(b.dataset.hasUser==='true'?'active':'invited'):'disabled';
     if(status==='disabled'&&!confirm('להשבית את המשתמש?'))return;
     b.disabled=true;
     const {error:updateError}=await supabase.from('organization_members').update({status,updated_at:new Date().toISOString()})
       .eq('id',b.dataset.toggleMember).eq('organization_id',ctx.member.organization_id);
-    if(updateError){alert(updateError.message);b.disabled=false;return}
-    toast(status==='disabled'?'המשתמש הושבת':'המשתמש הופעל');renderTeam();
+    if(updateError){
+      const box=document.getElementById('teamMessage');box.className='msg err';box.textContent=updateError.message;
+      b.disabled=false;return;
+    }
+    toast(status==='disabled'?'המשתמש הושבת':status==='active'?'המשתמש הופעל':'ההזמנה הופעלה מחדש');renderTeam();
   });
 }
 
