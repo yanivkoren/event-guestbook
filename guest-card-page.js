@@ -55,7 +55,7 @@ export async function renderGuestCardPage({token,app,api}){
   }
   return null;
  }
- async function generate(kind,content){
+ async function generate(kind,content,replacementPhoto=null){
   if(busy||!canEdit())return;
   if(kind!=='edit'&&attempts()>=state.max_design_attempts){note('נוצלו כל ניסיונות העיצוב לאירוע הזה.');return}
   const origin=visible();
@@ -75,17 +75,24 @@ export async function renderGuestCardPage({token,app,api}){
   if(!state.versions.length)app.innerHTML='<div class="loading">מכינים את כרטיס הברכה שלך…</div>';
   else note(kind==='alternative'?'מכינים לך עיצוב אחר…':'שומרים גרסה חדשה…');
   try{
-   const pages=await renderCardPages({template:target.template,design:target.design,content:text,image:photo});
+   let image=photo;
+   if(replacementPhoto){
+    const objectUrl=URL.createObjectURL(replacementPhoto);
+    try{image=await loadPhoto(objectUrl)}finally{URL.revokeObjectURL(objectUrl)}
+   }else if(origin?.photo_url)image=await loadPhoto(origin.photo_url);
+   else if(origin&&!origin.photo_url)image=null;
+   const pages=await renderCardPages({template:target.template,design:target.design,content:text,image});
    const files=await cardFiles(pages),body=new FormData();
    body.set('configuration',JSON.stringify({
-    creation_kind:kind,source_version_id:kind==='edit'?origin.id:null,
+    creation_kind:kind,source_version_id:origin?.id||null,
     content:text,design:target.design
    }));
    for(const file of files)body.append('page',file);
+   if(replacementPhoto)body.append('replacement_photo',replacementPhoto);
    const saved=await request('version',body);
    if(!await refresh(saved.version_id))return;
    editing=false;
-   message=kind==='initial'?'הכרטיס מוכן! אהבת אותו? אשר אותו כדי שתוכל לשתף.':'הגרסה החדשה מוכנה. אם היא מוצאת חן בעיניך, בחר בה.';
+   message=kind==='initial'?'הכרטיס מוכן! אפשר לשתף אותו או לנסות עיצוב אחר.':'הגרסה החדשה מוכנה ואפשר לשתף אותה.';
    mount();
   }catch(err){
    if(!state.versions.length)errorScreen(err.message);
@@ -128,8 +135,8 @@ export async function renderGuestCardPage({token,app,api}){
   }catch(err){if(err.name!=='AbortError')note('השיתוף לא הושלם. אפשר להוריד את התמונה ולשתף מהגלריה.')}
  }
  async function copyLink(){
-  try{await navigator.clipboard.writeText(location.href);note('הקישור האישי הועתק. שמור אותו לעצמך — אל תשתף אותו עם התמונה.')}
-  catch{prompt('העתק ושמור את הקישור האישי:',location.href)}
+  try{await navigator.clipboard.writeText(location.href);note('העתקנו את הקישור לחזרה לברכה. שמור אותו לעצמך — הוא מאפשר ניהול ומחיקה.')}
+  catch{prompt('העתק את הקישור כדי לחזור לברכה:',location.href)}
  }
  function showEdit(){
   editing=true;mount();
@@ -158,9 +165,8 @@ export async function renderGuestCardPage({token,app,api}){
    (current?'<div class="personal-card-image">'+currentFiles.map((url,i)=>'<div class="card-page">'+canvasFor(url)+(currentFiles.length>1?'<span class="small">עמוד '+(i+1)+' מתוך '+currentFiles.length+'</span>':'')+'</div>').join('')+'</div>':
    '<div class="loading">מכינים לך כרטיס…</div>')+
    (current?'<div class="personal-actions">'+
-      (open&&!currentSelected?'<button class="btn" data-action="choose">זה הכרטיס שלי ✓</button>':'')+
       (currentSelected?'<button class="btn" data-action="share">שתף כתמונה ↗</button>':'')+
-      (approved&&!currentSelected?'<p class="small">כדי לשתף את הגרסה הזאת, בחר בה תחילה.</p>':'')+
+      (approved&&!currentSelected?'<p class="small">זו גרסה קודמת. אפשר לחזור אליה דרך בחירתה בגלריה.</p>':'')+
       (open&&attempts()<state.max_design_attempts?'<button class="btn secondary" data-action="different">נסה עיצוב אחר</button>':'')+
       (open?'<button class="btn secondary" data-action="edit">עריכת הברכה</button>':'')+
       (currentSelected?'<button class="btn secondary" data-action="download">הורדת התמונה</button>':'')+
@@ -169,21 +175,31 @@ export async function renderGuestCardPage({token,app,api}){
    (editing&&open&&current?'<section class="card-edit-panel"><h2>עריכת הברכה</h2><p class="small">השינוי יישמר בגרסה חדשה. הגרסאות הישנות והשליחה המקורית נשארות כפי שהיו.</p>'+
     '<div class="field"><label class="label" for="editName">שם</label><input class="input" id="editName" maxlength="100" value="'+esc(current.content_snapshot.name)+'"></div>'+
     '<div class="field"><label class="label" for="editMessage">ברכה</label><textarea class="textarea" id="editMessage" maxlength="2000">'+esc(current.content_snapshot.message)+'</textarea></div>'+
-    '<div class="field"><label class="label" for="editEmoji">Emoji</label><input class="input" id="editEmoji" maxlength="30" value="'+esc(current.content_snapshot.emoji)+'"></div>'+
+    '<div class="field"><label class="label" for="editEmoji">Emoji</label><select class="select" id="editEmoji">'+
+      [...new Set([current.content_snapshot.emoji,...(state.reaction_options||[]).map(o=>o.emoji)])].map(emoji=>{
+       const choice=(state.reaction_options||[]).find(o=>o.emoji===emoji);
+       return '<option value="'+esc(emoji)+'" '+(emoji===current.content_snapshot.emoji?'selected':'')+'>'+esc(choice?(choice.emoji+' '+choice.label):(emoji||'ללא Emoji'))+'</option>';
+      }).join('')+'</select></div>'+
+    '<div class="field"><label class="label" for="editPhoto">תמונה</label><input class="input" type="file" id="editPhoto" accept="image/jpeg,image/png,image/webp" aria-describedby="editPhotoHelp"><p id="editPhotoHelp" class="small">אפשר להעלות תמונה חדשה במקום הקודמת (עד 15MB). המקור והגרסאות הקודמות יישמרו.</p></div>'+
     '<div class="row"><button class="btn" data-action="saveEdit">שמור שינוי</button><button class="btn secondary" data-action="cancelEdit">ביטול</button></div></section>':'')+
    gallery+
-   '<div class="card-private-tools"><p class="small">'+(approved?'הקישור האישי שלך מאפשר לחזור לכרטיס בכל עת.':'אפשר לשמור את הקישור כדי לחזור לכרטיס ולהשלים את הבחירה.')+' אין שחזור לקישור שאבד — אל תשלח אותו בשיתוף התמונה.</p>'+
-   '<button class="btn secondary" data-action="copy">שמור קישור אישי</button>'+
+   '<div class="card-private-tools"><p class="small">זהו קישור פרטי לחזרה לברכה, עריכה ומחיקה בזמן האירוע. אין שחזור לקישור שאבד — אל תשלח אותו בשיתוף התמונה.</p>'+
+   '<button class="btn secondary" data-action="copy">העתק קישור לחזרה לברכה</button>'+
    (open?'<button class="btn danger" data-action="delete">מחק את הברכה</button>':
     '<button class="btn secondary" data-action="requestDelete">בקש מחיקה ממנהל האירוע</button>')+
    '</div></div></section>';
   const bind=(name,fn)=>{const node=app.querySelector('[data-action="'+name+'"]');if(node)node.onclick=fn};
-  bind('choose',()=>chooseVersion(current.id));
   bind('different',()=>generate('alternative'));
   bind('share',()=>shareVersion(current));
   bind('download',async()=>{try{await downloadVersion(current)}catch(err){note(err.message)}});
   bind('edit',showEdit);
-  bind('saveEdit',()=>generate('edit',contentFromEditor()));
+  bind('saveEdit',()=>{
+   const replacement=document.getElementById('editPhoto')?.files?.[0]||null;
+   if(replacement&&(replacement.size>15*1024*1024||!['image/jpeg','image/png','image/webp'].includes(replacement.type))){
+    note('יש לבחור תמונת JPG, PNG או WebP עד 15MB.');return;
+   }
+   generate('edit',contentFromEditor(),replacement);
+  });
   bind('cancelEdit',()=>{editing=false;mount()});
   bind('copy',copyLink);
   bind('delete',async()=>{
@@ -191,7 +207,11 @@ export async function renderGuestCardPage({token,app,api}){
    try{await request('delete',{});await refresh();}catch(err){note(err.message)}
   });
   bind('requestDelete',async()=>{try{await request('request-deletion',{});note('בקשת המחיקה נשלחה למנהל האירוע.')}catch(err){note(err.message)}});
-  app.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{viewedId=b.dataset.view;editing=false;message='';mount()});
+  app.querySelectorAll('[data-view]').forEach(b=>b.onclick=async()=>{
+   if(busy)return;
+   if(!canEdit()){viewedId=b.dataset.view;editing=false;message='';mount();return}
+   await chooseVersion(b.dataset.view);
+  });
  }
  app.className='wrap';app.innerHTML='<div class="loading">טוען את הברכה שלך…</div>';
  try{
