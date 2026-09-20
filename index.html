@@ -134,7 +134,7 @@ function renderAuth(){
   app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">כניסה לעובדי הארגון</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">הפעלת חשבון עובד</button></div><div class="row" style="margin-top:12px"><button class="btn secondary" id="forgotPassword">שכחתי סיסמה</button></div></div></section>`;
   const msg=t=>document.getElementById('authMsg').innerHTML=`<div class="msg">${esc(t)}</div>`;
   document.getElementById('signIn').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return msg(error.message);orgContext=null;go('/manager')};
-  document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<6)return msg('יש להזין אימייל וסיסמה של לפחות 6 תווים.');const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session){orgContext=null;go('/manager')}else msg('החשבון נוצר. אם נשלח מייל אימות, יש לאשר אותו ואז להתחבר. הגישה תיפתח רק אם הסופר־מנהל הגדיר את האימייל הזה כעובד.')};
+  document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<6)return msg('יש להזין אימייל וסיסמה של לפחות 6 תווים.');const {data,error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/manager'}});if(error)return msg(error.message);if(data.session){orgContext=null;go('/manager')}else msg('החשבון נוצר. אם נשלח מייל אימות, יש לאשר אותו ואז להתחבר. הגישה תיפתח רק אם הסופר־מנהל הגדיר את האימייל הזה כעובד.')};
   document.getElementById('forgotPassword').onclick=async()=>{
     const email=document.getElementById('email').value.trim().toLowerCase(),button=document.getElementById('forgotPassword');
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg('יש להזין כתובת אימייל תקינה כדי לאפס סיסמה.');
@@ -460,6 +460,13 @@ supabase.auth.onAuthStateChange((event)=>{
     passwordRecoveryConfirmed=true;
     history.replaceState({},'', '/manager/reset-password');
     renderPasswordReset();
+  }else if(event==='SIGNED_IN'){
+    const callbackType=new URLSearchParams(location.hash.slice(1)).get('type');
+    if(callbackType==='signup'||callbackType==='email'){
+      // Supabase has consumed the email-confirmation fragment; don't keep credentials in the address bar.
+      history.replaceState({},'', '/manager');
+      route();
+    }
   }
 });
 route();
