@@ -116,7 +116,11 @@ export async function renderCardPages({template,design,content,image}){
   // Preserve explicit blank lines by storing line offsets in the snapshot.
   ctx.save();drawLines(ctx,slice,540,top,leading,p);ctx.restore();
   remaining=lines.slice(capacity).join('\n');
-  if(first&&content.emoji)label(ctx,String(content.emoji),540,layout.emoji.y,790,layout.emoji.size,typ,p.text,'400');
+  if(first&&content.emoji){
+   const hasReactionLabel=!!String(content.reaction_label||'').trim();
+   label(ctx,String(content.emoji),540,hasReactionLabel?1206:layout.emoji.y,790,hasReactionLabel?49:layout.emoji.size,typ,p.text,'400');
+   if(hasReactionLabel)label(ctx,String(content.reaction_label),540,1265,840,30,typ,p.text,'400');
+  }
   ctx.save();ctx.font=`22px ${typ.family}`;ctx.textAlign='center';ctx.fillStyle=p.accent;
   if(!first||remaining)ctx.fillText(`עמוד ${pageNo+1}`,540,1300);ctx.restore();
   pages.push(c);first=false;
