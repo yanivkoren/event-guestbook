@@ -1,165 +1,203 @@
-import {defaultDesign,loadPhoto,renderCardPages,cardFiles,downloadPage} from '/guest-card-renderer.js';
+import {defaultDesign,loadPhoto,renderCardPages,cardFiles} from '/guest-card-renderer.js';
 
-// Public personal-card page. A high-entropy token is a bearer capability; never share its URL.
-export async function renderGuestCardPage({token,app,api,go}){
- const endpoint=api+'?token='+encodeURIComponent(token);
+// The guest sees a finished card, not the template editor.
+// A personal URL is a private bearer credential and is never part of a shared image.
+export async function renderGuestCardPage({token,app,api}){
+ const base=api+'?token='+encodeURIComponent(token);
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const escapeUrl=x=>esc(x);
- const notice=x=>{const node=document.getElementById('personalNotice');if(node)node.textContent=x};
- async function request(action,method='GET',body){
-  const response=await fetch(endpoint+'&action='+encodeURIComponent(action),{
-   method,...(body?{body:body instanceof FormData?body:JSON.stringify(body)}:{}),
+ const errorScreen=message=>{app.className='wrap';app.innerHTML='<section class="card"><div class="content"><div class="msg err">'+esc(message)+'</div><button class="btn secondary" id="reloadCard">ניסיון נוסף</button></div></section>';document.getElementById('reloadCard').onclick=()=>location.reload()};
+ async function request(action,body){
+  const response=await fetch(base+'&action='+encodeURIComponent(action),{
+   method:body?'POST':'GET',
+   ...(body?{body:body instanceof FormData?body:JSON.stringify(body)}:{}),
    ...(body&&!(body instanceof FormData)?{headers:{'content-type':'application/json'}}:{})
   });
-  const data=await response.json().catch(()=>({error:'שגיאה לא צפויה'}));
-  if(!response.ok)throw Error(data.error||'אירעה שגיאה');
-  return data;
+  const result=await response.json().catch(()=>({error:'שגיאה לא צפויה'}));
+  if(!response.ok)throw Error(result.error||'הפעולה לא הושלמה');
+  return result;
  }
- app.className='wrap';app.innerHTML='<div class="loading">טוען את כרטיס הברכה שלך...</div>';
- let data;
- try{data=await request('state')}catch(e){app.innerHTML='<div class="msg err">'+esc(e.message)+'</div>';return}
- if(data.deleted){app.innerHTML='<div class="msg">הברכה הוסרה מהמערכת.</div>';return}
- let photo=null;
- try{photo=await loadPhoto(data.photo_url)}catch(e){app.innerHTML='<div class="msg err">לא ניתן לפתוח את תמונת המקור. נסו לרענן את העמוד.</div>';return}
- let selected=data.versions.find(x=>x.id===data.selected_version_id);
- let draftContent={...(selected?.content_snapshot||data.original)};
- const available=data.templates||[];
- let template=available.find(t=>t.id===selected?.design_snapshot?.template_id)
-  ||available.find(t=>t.id===data.default_template_id)||available[0];
- if(!template){app.innerHTML='<div class="msg err">לא הוגדר עיצוב לכרטיס.</div>';return}
- let design={...defaultDesign(template),...(selected?.design_snapshot||{})};
- let editableBaseVersionId=selected?.id||data.versions[data.versions.length-1]?.id||null;
- let previewPages=[],isBusy=false,revision=0;
- const active=!!data.can_edit;
- const attempts=()=>data.design_attempts_used;
- function selectOptions(items,selectedValue){return items.map(([k,label])=>'<option value="'+esc(k)+'" '+(k===selectedValue?'selected':'')+'>'+esc(label)+'</option>').join('')}
- function options(list,v){return selectOptions(list.map(x=>[x,x]),v)}
- function controlValue(id){return document.getElementById(id)?.value}
- function readForm(){
-  if(!active)return;
-  draftContent={title:controlValue('cardTitle')||'',name:controlValue('cardName')||'',message:controlValue('cardMessage')||'',emoji:controlValue('cardEmoji')||''};
-  design.palette=controlValue('cardPalette');design.frame=controlValue('cardFrame');
-  design.pattern_id=controlValue('cardPattern');design.typography_id=controlValue('cardFont');
-  design.crop_strategy=controlValue('cardCrop');design.crop_x=Number(controlValue('cardX'));design.crop_y=Number(controlValue('cardY'));
+ let state,photo=null,viewedId=null,editing=false,busy=false,message='';
+ const attempts=()=>state?.design_attempts_used||0;
+ const chosen=()=>state?.versions?.find(v=>v.id===state.selected_version_id)||null;
+ const visible=()=>state?.versions?.find(v=>v.id===viewedId)||chosen()||state?.versions?.[state.versions.length-1]||null;
+ const canEdit=()=>!!state?.can_edit;
+ function note(value){message=value;const node=document.getElementById('cardNotice');if(node)node.textContent=value}
+ function markBusy(value){busy=value;app.querySelectorAll('[data-action]').forEach(b=>b.disabled=value)}
+ function canvasFor(imageUrl){
+  return '<img class="card-preview" src="'+esc(imageUrl)+'" alt="כרטיס הברכה שלך">';
  }
- function drawVersionGallery(){
-  const gallery=document.getElementById('cardHistory');if(!gallery)return;
-  gallery.innerHTML=data.versions.map(v=>'<article class="event-card"><div class="small">גרסה '+v.version_number+' · '+v.page_urls.length+' עמודים'+(v.id===data.selected_version_id?' · נבחרה':'')+'</div><img class="thumb" alt="עמוד ראשון של הכרטיס" src="'+escapeUrl(v.page_urls[0])+'"><div class="row" style="margin-top:10px"><button class="btn secondary" data-review="'+v.id+'">צפייה</button>'+(active?'<button class="btn" data-select="'+v.id+'" '+(v.id===data.selected_version_id?'disabled':'')+'>בחירת גרסה זו</button>':'')+'</div></article>').join('')||'<p class="small">עדיין לא נוצרו גרסאות.</p>';
-  gallery.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>showStored(data.versions.find(v=>v.id===b.dataset.review)));
-  gallery.querySelectorAll('[data-select]').forEach(b=>b.onclick=()=>selectVersion(b.dataset.select));
+ async function refresh(preferredId){
+  state=await request('state');
+  if(state.deleted){app.className='wrap';app.innerHTML='<section class="card"><div class="content"><h1>הברכה הוסרה</h1><p>הברכה אינה זמינה עוד דרך הקישור האישי.</p></div></section>';return false}
+  const present=state.versions.some(v=>v.id===preferredId);
+  viewedId=present?preferredId:state.selected_version_id||state.versions[state.versions.length-1]?.id||null;
+  return true;
  }
- function showStored(v){
-  if(!v)return;const area=document.getElementById('cardRendered');if(!area)return;
-  area.innerHTML='<div class="small">גרסה '+v.version_number+' · '+v.page_urls.length+' עמודים</div>'+
-   v.page_urls.map((url,i)=>'<img class="card-preview" alt="עמוד '+(i+1)+'" src="'+escapeUrl(url)+'">').join('');
-  area.querySelectorAll('img').forEach((img,i)=>{img.style.cursor='pointer';img.title='פתח עמוד';img.onclick=()=>window.open(v.page_urls[i],'_blank','noopener')});
-  const controls=document.getElementById('storedActions');
-  controls.innerHTML='<button class="btn secondary" id="downloadStored">הורדת עמודים</button><button class="btn" id="shareStored">שיתוף כתמונה</button>';
-  document.getElementById('downloadStored').onclick=async()=>{
-   for(let i=0;i<v.page_urls.length;i++){const res=await fetch(v.page_urls[i]);const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='greeting-'+v.version_number+'-'+(i+1)+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),6000)}
-  };
-  document.getElementById('shareStored').onclick=async()=>{
-   try{
-    const files=await Promise.all(v.page_urls.map(async(url,i)=>new File([await(await fetch(url)).blob()],'greeting-'+(i+1)+'.png',{type:'image/png'})));
-    if(navigator.share&&navigator.canShare?.({files})){await navigator.share({files});return}
-    notice('המכשיר לא תומך בשיתוף קובצי תמונה ישיר. הורידו את העמודים ושתפו אותם מהגלריה.');
-   }catch(e){if(e.name!=='AbortError')notice('השיתוף לא הושלם. אפשר להוריד ולשתף מהגלריה.')}
-  };
- }
- async function drawPreview(){
-  if(!active)return;
-  const number=++revision;const area=document.getElementById('cardRendered');if(!area)return;
-  area.innerHTML='<div class="loading">מכין תצוגה מקדימה...</div>';
-  try{
-   const pages=await renderCardPages({template,design,content:draftContent,image:photo});
-   if(number!==revision)return;previewPages=pages;
-   area.innerHTML='';for(const c of pages){c.className='card-preview';area.appendChild(c)}
-   notice(pages.length>1?'הברכה תוצג במלואה ב־'+pages.length+' עמודים.':'תצוגה מקדימה — עדיין לא נשמרה כגרסה.');
-  }catch(e){if(number!==revision)return;previewPages=[];area.innerHTML='<div class="msg err">'+esc(e.message)+'</div>'}
- }
- async function saveVersion(kind){
-  if(isBusy||!active)return;readForm();
-  if(kind!=='edit'&&attempts()>=data.max_design_attempts){notice('נוצלה מכסת ניסיונות העיצוב');return}
-  if(kind==='edit'&&!data.versions.length){notice('יש ליצור קודם כרטיס ראשון');return}
-  isBusy=true;notice('שומר את הגרסה...');try{
-   const pages=await renderCardPages({template,design,content:draftContent,image:photo});
-   const files=await cardFiles(pages);const form=new FormData();
-   form.set('configuration',JSON.stringify({creation_kind:kind,source_version_id:kind==='edit'?editableBaseVersionId:null,content:draftContent,design}));
-   files.forEach(f=>form.append('page',f));
-   await request('version','POST',form);
-   data=await request('state');selected=data.versions.find(x=>x.id===data.selected_version_id);
-   notice('הגרסה נשמרה. בחרו אותה כדי לאשר את הכרטיס.');
-   const last=data.versions[data.versions.length-1];editableBaseVersionId=last.id;mount();showStored(last);
-  }catch(e){notice(e.message)}finally{isBusy=false}
- }
- async function selectVersion(id){
-  if(!active||isBusy)return;
-  isBusy=true;try{await request('select','POST',{version_id:id});data=await request('state');selected=data.versions.find(v=>v.id===id);draftContent={...selected.content_snapshot};
-   template=data.templates.find(t=>t.id===selected.design_snapshot.template_id)||template;design={...selected.design_snapshot};editableBaseVersionId=selected.id;
-   mount();showStored(selected);notice('הגרסה אושרה ונבחרה. זה הקישור האישי שלך — שמרו אותו ואל תשתפו אותו.');
-  }catch(e){notice(e.message)}finally{isBusy=false}
- }
- function nextDesign(){
-  readForm();
-  const tried=data.versions.filter(v=>v.creation_kind!=='edit').map(v=>v.design_snapshot);
-  const byTemplate=[...available.slice(available.indexOf(template)+1),...available.slice(0,available.indexOf(template)+1)];
-  for(const candidateTemplate of byTemplate){
-   const paletteKeys=Object.keys(candidateTemplate.palettes);
-   for(const palette of paletteKeys){
-    for(const pattern_id of candidateTemplate.pattern_options){
-     const candidate={...defaultDesign(candidateTemplate),palette,pattern_id,crop_x:design.crop_x,crop_y:design.crop_y};
-     const isUsed=tried.some(v=>['template_id','palette','frame','pattern_id','typography_id','photo_position'].every(k=>v[k]===candidate[k]));
-     if(!isUsed){template=candidateTemplate;design=candidate;mount();return true}
+ function alternativeDesign(){
+  const allowed=state.templates||[],current=visible();
+  const taken=state.versions.filter(v=>v.creation_kind!=='edit').map(v=>v.design_snapshot);
+  if(!allowed.length)return null;
+  const start=allowed.findIndex(t=>t.id===current?.design_snapshot?.template_id);
+  const ordered=[...allowed.slice(Math.max(0,start+1)),...allowed.slice(0,Math.max(0,start+1))];
+  for(const t of ordered){
+   for(const palette of Object.keys(t.palettes)){
+    for(const pattern_id of t.pattern_options){
+     for(const frame of t.frame_options){
+      for(const typography_id of t.typography_options){
+       const candidate={...defaultDesign(t),palette,pattern_id,frame,typography_id,
+        crop_x:current?.design_snapshot?.crop_x??.5,crop_y:current?.design_snapshot?.crop_y??.5};
+       if(!taken.some(d=>['template_id','palette','pattern_id','frame','typography_id','photo_position'].every(k=>d[k]===candidate[k])))
+        return {template:t,design:candidate};
+      }
+     }
     }
    }
   }
-  notice('אין עוד שילובי עיצוב חדשים בספרייה שהוגדרה לאירוע');
-  return false;
+  return null;
+ }
+ async function generate(kind,content){
+  if(busy||!canEdit())return;
+  if(kind!=='edit'&&attempts()>=state.max_design_attempts){note('נוצלו כל ניסיונות העיצוב לאירוע הזה.');return}
+  const origin=visible();
+  let target;
+  if(kind==='initial'){
+   const template=state.templates.find(t=>t.id===state.default_template_id)||state.templates[0];
+   if(!template){errorScreen('לא הוגדר עיצוב לאירוע.');return}
+   target={template,design:defaultDesign(template)};
+  }else if(kind==='alternative')target=alternativeDesign();
+  else{
+   const template=state.templates.find(t=>t.id===origin?.design_snapshot?.template_id);
+   if(template)target={template,design:{...origin.design_snapshot}};
+  }
+  if(!target){note('אין כרגע עיצוב נוסף בספרייה שהוגדרה לאירוע.');return}
+  const text=content||origin?.content_snapshot||state.original;
+  markBusy(true);
+  if(!state.versions.length)app.innerHTML='<div class="loading">מכינים את כרטיס הברכה שלך…</div>';
+  else note(kind==='alternative'?'מכינים לך עיצוב אחר…':'שומרים גרסה חדשה…');
+  try{
+   const pages=await renderCardPages({template:target.template,design:target.design,content:text,image:photo});
+   const files=await cardFiles(pages),body=new FormData();
+   body.set('configuration',JSON.stringify({
+    creation_kind:kind,source_version_id:kind==='edit'?origin.id:null,
+    content:text,design:target.design
+   }));
+   for(const file of files)body.append('page',file);
+   const saved=await request('version',body);
+   if(!await refresh(saved.version_id))return;
+   editing=false;
+   message=kind==='initial'?'הכרטיס מוכן! אהבת אותו? אשר אותו כדי שתוכל לשתף.':'הגרסה החדשה מוכנה. אם היא מוצאת חן בעיניך, בחר בה.';
+   mount();
+  }catch(err){
+   if(!state.versions.length)errorScreen(err.message);
+   else note(err.message);
+  }finally{markBusy(false)}
+ }
+ async function chooseVersion(id){
+  if(!canEdit()||busy)return;
+  markBusy(true);
+  try{
+   await request('select',{version_id:id});
+   if(!await refresh(id))return;
+   editing=false;message='הכרטיס נבחר! אפשר לשתף אותו כתמונה ולשמור את הקישור האישי.';
+   mount();
+  }catch(err){note(err.message)}finally{markBusy(false)}
+ }
+ async function loadImageFiles(v){
+  const files=[];
+  for(let i=0;i<v.page_urls.length;i++){
+   const res=await fetch(v.page_urls[i]);
+   if(!res.ok)throw Error('לא ניתן לטעון את התמונה לשיתוף');
+   files.push(new File([await res.blob()],'greeting-'+(i+1)+'.png',{type:'image/png'}));
+  }
+  return files;
+ }
+ async function downloadVersion(v){
+  const files=await loadImageFiles(v);
+  for(const file of files){
+   const objectUrl=URL.createObjectURL(file),a=document.createElement('a');
+   a.href=objectUrl;a.download=file.name;a.click();
+   setTimeout(()=>URL.revokeObjectURL(objectUrl),10000);
+  }
+ }
+ async function shareVersion(v){
+  if(!v||v.id!==state.selected_version_id){note('כדי לשתף, בחר קודם את הכרטיס שאהבת.');return}
+  try{
+   const files=await loadImageFiles(v);
+   if(navigator.share&&navigator.canShare?.({files})){await navigator.share({files});return}
+   note('שיתוף ישיר אינו נתמך במכשיר הזה. הורד את התמונה ושתף אותה מהגלריה.');
+  }catch(err){if(err.name!=='AbortError')note('השיתוף לא הושלם. אפשר להוריד את התמונה ולשתף מהגלריה.')}
+ }
+ async function copyLink(){
+  try{await navigator.clipboard.writeText(location.href);note('הקישור האישי הועתק. שמור אותו לעצמך — אל תשתף אותו עם התמונה.')}
+  catch{prompt('העתק ושמור את הקישור האישי:',location.href)}
+ }
+ function showEdit(){
+  editing=true;mount();
+  document.getElementById('editName')?.focus();
+ }
+ function contentFromEditor(){
+  const baseVersion=visible();
+  return {
+   title:baseVersion?.content_snapshot?.title??state.original.title,
+   name:document.getElementById('editName').value,
+   message:document.getElementById('editMessage').value,
+   emoji:document.getElementById('editEmoji').value
+  };
  }
  function mount(){
-  const closed=!active,link=location.href;
-  app.innerHTML='<section class="card"><div class="content"><h1>כרטיס הברכה שלי ❤️</h1><p class="small">'+esc(data.event.title)+'</p>'+
-   (selected?'<div class="msg ok">בחרת גרסה '+selected.version_number+'. הקישור האישי נשאר זהה גם לאחר שינוי הבחירה.</div>':
-   '<div class="msg">הכרטיס עדיין לא אושר על ידך. צרו גרסה ובחרו את זו שאהבתם.</div>')+
-   '<div class="msg"><strong>'+(selected?'הקישור האישי שלך':'קישור להמשך עריכת הטיוטה')+'</strong><p class="small">הקישור מקנה גישה לניהול הברכה; לא שולחים אותו בשיתוף התמונה. שמרו אותו כעת — אין שחזור קישור שאבד.</p><button class="btn secondary" id="copyPersonal">העתקת קישור</button></div>'+
-   (closed?'<div class="msg">חלון העריכה של האירוע הסתיים. אפשר לצפות ולשתף את הכרטיס שנבחר, אך לא לערוך או למחוק אותו בעצמך.</div>':'')+
-   '<div id="personalNotice" class="small" aria-live="polite"></div>'+
-   '<div class="grid"><div><div id="cardRendered"></div><div class="row" id="storedActions"></div></div>'+
-   (active?'<section class="card"><div class="content"><h2>עיצוב ותוכן</h2><p class="small">כל מה שנמסר יוצג בכרטיס. שינוי כאן יוצר גרסה חדשה — המקור והגרסאות הישנות נשמרים.</p>'+
-   '<div class="field"><label class="label">עיצוב</label><select class="select" id="cardTemplate">'+selectOptions(available.map(t=>[t.id,t.name]),template.id)+'</select></div>'+
-   '<div class="field"><label class="label">צבעים</label><select class="select" id="cardPalette">'+selectOptions(Object.entries(template.palettes).map(([k,v])=>[k,v.label||k]),design.palette)+'</select></div>'+
-   '<div class="field"><label class="label">Pattern</label><select class="select" id="cardPattern">'+options(template.pattern_options,design.pattern_id)+'</select></div>'+
-   '<div class="field"><label class="label">מסגרת</label><select class="select" id="cardFrame">'+options(template.frame_options,design.frame)+'</select></div>'+
-   '<div class="field"><label class="label">גופן</label><select class="select" id="cardFont">'+options(template.typography_options,design.typography_id)+'</select></div>'+
-   '<div class="field"><label class="label">חיתוך</label><select class="select" id="cardCrop">'+selectOptions(template.crop_strategies.map(x=>[x,({center:"מרכז",top:"למעלה",bottom:"למטה",left:"שמאל",right:"ימין"})[x]||x]),design.crop_strategy)+'</select></div>'+
-   (photo?'<div class="field"><label class="label">מיקום אופקי</label><input id="cardX" type="range" min="0" max="1" step=".01" value="'+design.crop_x+'"></div><div class="field"><label class="label">מיקום אנכי</label><input id="cardY" type="range" min="0" max="1" step=".01" value="'+design.crop_y+'"></div>':'<input type="hidden" id="cardX" value=".5"><input type="hidden" id="cardY" value=".5">')+
-   '<div class="field"><label class="label">כותרת</label><input id="cardTitle" class="input" maxlength="200" value="'+esc(draftContent.title)+'"></div>'+
-   '<div class="field"><label class="label">שם המברך</label><input id="cardName" class="input" maxlength="100" value="'+esc(draftContent.name)+'"></div>'+
-   '<div class="field"><label class="label">ברכה</label><textarea class="textarea" id="cardMessage" maxlength="2000">'+esc(draftContent.message)+'</textarea></div>'+
-   '<div class="field"><label class="label">Emoji</label><input id="cardEmoji" class="input" maxlength="30" value="'+esc(draftContent.emoji)+'"></div>'+
-   '<div class="small">ניסיונות עיצוב: '+attempts()+' מתוך '+data.max_design_attempts+'. תיקוני תוכן/Crop אינם צורכים ניסיון.</div>'+
-   '<div class="row" style="margin-top:12px"><button class="btn secondary" id="previewCard">תצוגה מקדימה</button>'+
-   '<button class="btn" id="saveCard">'+(data.versions.length?'שמירת תיקון כגרסה חדשה':'יצירת כרטיס ראשון')+'</button>'+
-   '<button class="btn secondary" id="differentCard" '+(attempts()>=data.max_design_attempts?'disabled':'')+'>נסה עיצוב אחר</button></div>'+
-   '<p class="help">שינוי עיצוב צורך ניסיון נוסף. תיקון מלל או חיתוך בלבד אינו צורך ניסיון. המלצות AI עדיין אינן מחוברות.</p>'+
-   '</div></section>':'<div></div>')+'</div>'+
-   '<h2>הגרסאות שלי</h2><div id="cardHistory" class="grid"></div>'+
-   (active?'<div class="row" style="margin-top:24px"><button class="btn danger" id="deleteOwn">מחיקת הברכה</button></div>':
-   '<div class="row" style="margin-top:24px"><button class="btn secondary" id="requestDelete">בקשת מחיקה ממנהל האירוע</button></div>')+
-   '</div></section>';
-  document.getElementById('copyPersonal').onclick=async()=>{try{await navigator.clipboard.writeText(link);notice('הקישור הועתק. שמרו אותו במקום בטוח.')}catch{prompt('העתיקו ושמרו את הקישור:',link)}};
-  if(active){
-   document.getElementById('cardTemplate').onchange=e=>{readForm();template=available.find(t=>t.id===e.target.value)||template;design={...defaultDesign(template),crop_x:design.crop_x,crop_y:design.crop_y};mount();drawPreview()};
-   document.getElementById('previewCard').onclick=()=>{readForm();drawPreview()};
-   document.getElementById('saveCard').onclick=()=>saveVersion(data.versions.length?'edit':'initial');
-   document.getElementById('differentCard').onclick=()=>{if(attempts()>=data.max_design_attempts)return;if(nextDesign())saveVersion('alternative')};
-   document.getElementById('deleteOwn').onclick=async()=>{if(!confirm('למחוק את הברכה? הגישה תוסר מיידית.'))return;try{await request('delete','POST',{});app.innerHTML='<div class="msg">הברכה הוסרה. עותקים שכבר שותפו מחוץ למערכת לא ניתנים למחיקה מכאן.</div>'}catch(e){notice(e.message)}};
-  }else document.getElementById('requestDelete').onclick=async()=>{try{await request('request-deletion','POST',{});notice('בקשת המחיקה נשלחה למנהל האירוע.')}catch(e){notice(e.message)}};
-  drawVersionGallery();
-  if(selected)showStored(selected);
-  else if(data.versions.length)showStored(data.versions[data.versions.length-1]);
-  else if(active)drawPreview();
-  else document.getElementById('cardRendered').innerHTML='<div class="msg">לא נבחר כרטיס לפני סיום חלון האירוע.</div>';
+  const current=visible(),approved=chosen(),open=canEdit();
+  const currentSelected=!!current&&current.id===state.selected_version_id;
+  const gallery=state.versions.length>1?'<details class="card-older"><summary>גרסאות קודמות ('+state.versions.length+')</summary><div class="card-version-list">'+
+   state.versions.map(v=>'<button type="button" class="card-version'+(v.id===current?.id?' current':'')+'" data-view="'+esc(v.id)+'"><img src="'+esc(v.page_urls[0])+'" alt="גרסה '+v.version_number+'"><span>גרסה '+v.version_number+(v.id===state.selected_version_id?' · הכרטיס שבחרת':'')+'</span></button>').join('')+
+   '</div></details>':'';
+  const currentFiles=current?.page_urls||[];
+  app.className='wrap personal-card-page';
+  app.innerHTML='<section class="card personal-card-shell"><div class="content"><div class="center"><h1>כרטיס הברכה שלך ❤️</h1><p class="small">'+esc(state.event.title)+'</p></div>'+
+   (!open?'<div class="msg">חלון העריכה הסתיים. אפשר להמשיך לצפות ולשתף את הכרטיס שבחרת.</div>':'')+
+   '<div id="cardNotice" class="card-notice" role="status" aria-live="polite">'+esc(message)+'</div>'+
+   (current?'<div class="personal-card-image">'+currentFiles.map((url,i)=>'<div class="card-page">'+canvasFor(url)+(currentFiles.length>1?'<span class="small">עמוד '+(i+1)+' מתוך '+currentFiles.length+'</span>':'')+'</div>').join('')+'</div>':
+   '<div class="loading">מכינים לך כרטיס…</div>')+
+   (current?'<div class="personal-actions">'+
+      (open&&!currentSelected?'<button class="btn" data-action="choose">זה הכרטיס שלי ✓</button>':'')+
+      (currentSelected?'<button class="btn" data-action="share">שתף כתמונה ↗</button>':'')+
+      (approved&&!currentSelected?'<p class="small">כדי לשתף את הגרסה הזאת, בחר בה תחילה.</p>':'')+
+      (open&&attempts()<state.max_design_attempts?'<button class="btn secondary" data-action="different">נסה עיצוב אחר</button>':'')+
+      (open?'<button class="btn secondary" data-action="edit">עריכת הברכה</button>':'')+
+      (currentSelected?'<button class="btn secondary" data-action="download">הורדת התמונה</button>':'')+
+    '</div>':'')+
+   (open&&current?'<p class="center small">ניסיונות עיצוב: '+attempts()+' מתוך '+state.max_design_attempts+'</p>':'')+
+   (editing&&open&&current?'<section class="card-edit-panel"><h2>עריכת הברכה</h2><p class="small">השינוי יישמר בגרסה חדשה. הגרסאות הישנות והשליחה המקורית נשארות כפי שהיו.</p>'+
+    '<div class="field"><label class="label" for="editName">שם</label><input class="input" id="editName" maxlength="100" value="'+esc(current.content_snapshot.name)+'"></div>'+
+    '<div class="field"><label class="label" for="editMessage">ברכה</label><textarea class="textarea" id="editMessage" maxlength="2000">'+esc(current.content_snapshot.message)+'</textarea></div>'+
+    '<div class="field"><label class="label" for="editEmoji">Emoji</label><input class="input" id="editEmoji" maxlength="30" value="'+esc(current.content_snapshot.emoji)+'"></div>'+
+    '<div class="row"><button class="btn" data-action="saveEdit">שמור שינוי</button><button class="btn secondary" data-action="cancelEdit">ביטול</button></div></section>':'')+
+   gallery+
+   '<div class="card-private-tools"><p class="small">'+(approved?'הקישור האישי שלך מאפשר לחזור לכרטיס בכל עת.':'אפשר לשמור את הקישור כדי לחזור לכרטיס ולהשלים את הבחירה.')+' אין שחזור לקישור שאבד — אל תשלח אותו בשיתוף התמונה.</p>'+
+   '<button class="btn secondary" data-action="copy">שמור קישור אישי</button>'+
+   (open?'<button class="btn danger" data-action="delete">מחק את הברכה</button>':
+    '<button class="btn secondary" data-action="requestDelete">בקש מחיקה ממנהל האירוע</button>')+
+   '</div></div></section>';
+  const bind=(name,fn)=>{const node=app.querySelector('[data-action="'+name+'"]');if(node)node.onclick=fn};
+  bind('choose',()=>chooseVersion(current.id));
+  bind('different',()=>generate('alternative'));
+  bind('share',()=>shareVersion(current));
+  bind('download',async()=>{try{await downloadVersion(current)}catch(err){note(err.message)}});
+  bind('edit',showEdit);
+  bind('saveEdit',()=>generate('edit',contentFromEditor()));
+  bind('cancelEdit',()=>{editing=false;mount()});
+  bind('copy',copyLink);
+  bind('delete',async()=>{
+   if(!confirm('למחוק את הברכה? לא תהיה אפשרות לגשת אליה דרך הקישור האישי.'))return;
+   try{await request('delete',{});await refresh();}catch(err){note(err.message)}
+  });
+  bind('requestDelete',async()=>{try{await request('request-deletion',{});note('בקשת המחיקה נשלחה למנהל האירוע.')}catch(err){note(err.message)}});
+  app.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{viewedId=b.dataset.view;editing=false;message='';mount()});
  }
- mount();
+ app.className='wrap';app.innerHTML='<div class="loading">טוען את הברכה שלך…</div>';
+ try{
+  if(!await refresh())return;
+  photo=await loadPhoto(state.photo_url);
+  if(!state.versions.length&&canEdit()){await generate('initial',state.original);return}
+  mount();
+ }catch(err){errorScreen(err.message)}
 }
