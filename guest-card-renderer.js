@@ -33,7 +33,7 @@ function decorate(ctx,t,p,d){
  ctx.fillStyle=p.background;ctx.fillRect(0,0,CARD_WIDTH,CARD_HEIGHT);
  ctx.strokeStyle=p.accent;ctx.lineWidth=3;round(ctx,38,38,1004,1274,26);ctx.stroke();
  ctx.strokeStyle=p.accent2;ctx.lineWidth=1;round(ctx,55,55,970,1240,22);ctx.stroke();
- if(rendererPattern(t,d)==='none')return;
+ if(rendererPattern(t,d)==='none'||rendererPattern(t,d)==='uploaded')return;
  ctx.save();ctx.globalAlpha=.75;
  if(rendererPattern(t,d)==='botanical'){
   for(const sign of [1,-1]){ctx.save();ctx.translate(sign===1?70:1010,190);ctx.scale(sign,1);
@@ -113,7 +113,7 @@ export async function renderCardPages({template,design,content,image,previewGuid
  const custom=template.font_definitions?.[design.typography_id];
  let typ=TYPOGRAPHY[rendererTypography(template,design)];
  if(custom?.asset_url){
-  const family='guestbook_'+String(design.typography_id).replace(/[^a-z0-9_]/gi,'_');
+  const family='guestbook_'+String(design.typography_id+'_'+custom.asset_url.split('/').pop()).replace(/[^a-z0-9_]/gi,'_');
   const face=new FontFace(family,'url("'+custom.asset_url+'")');
   await face.load();document.fonts.add(face);typ={family:'"'+family+'", sans-serif',weight:'400',titleWeight:'700'};
  }
