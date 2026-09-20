@@ -325,12 +325,49 @@ async function renderTeam(){
   if(ctx.member.role!=='super_admin'){go('/manager');return}
   app.className='wrap';app.innerHTML='<div class="loading">טוען עובדים...</div>';
   const {data:members,error}=await supabase.from('organization_members').select('id,email,display_name,role,status,user_id,created_at').eq('organization_id',ctx.member.organization_id).order('created_at');
-  if(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
-  const items=(members||[]).map(m=>`<div class="member"><div><strong>${esc(m.display_name||m.email)}</strong><div class="small">${esc(m.email)} · ${m.status==='active'?'פעיל':m.status==='invited'?'מוזמן':'מושבת'}</div></div><div class="row"><span class="role ${m.role==='super_admin'?'super':''}">${m.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'}</span>${m.role==='event_manager'? `<button class="btn secondary" data-toggle-member="${m.id}" data-status="${m.status}">${m.status==='disabled'?'הפעל מחדש':'השבת'}</button>` : ''}</div></div>`).join('');
-  app.innerHTML=`<div class="top"><div><button class="btn secondary" id="teamBack">← Dashboard</button><h1>עובדי הארגון</h1><div class="small">רק הסופר־מנהל יכול להוסיף או להשבית עובדים.</div></div></div><section class="card"><div class="content"><h2>הוספת עובד</h2><div class="row"><div class="field grow"><label class="label">שם</label><input class="input" id="memberName" placeholder="למשל: דנה"></div><div class="field grow"><label class="label">אימייל</label><input class="input" id="memberEmail" type="email" placeholder="name@example.com"></div></div><button class="btn" id="addMember">הוסף עובד</button><p class="help">העובד יפעיל חשבון עם אותו אימייל במסך הכניסה. לאחר ההתחברות הוא יצורף אוטומטית לארגון.</p><hr style="border:0;border-top:1px solid #eee;margin:24px 0"><h2>משתמשים</h2>${items}</div></section>`;
+  if(error){app.innerHTML='<div class="msg err">'+esc(error.message)+'</div>';return}
+  const activeSupers=(members||[]).filter(m=>m.role==='super_admin'&&m.status==='active').length;
+  const items=(members||[]).map(m=>{
+    const self=m.user_id===ctx.session.user.id;
+    const status=m.status==='active'?'פעיל':m.status==='invited'?'מוזמן':'מושבת';
+    const role=m.role==='super_admin'?'סופר־מנהל':'מנהל אירועים';
+    const canToggle=!self && (m.role!=='super_admin'||m.status!=='active'||activeSupers>1);
+    return '<div class="member"><div><strong>'+esc(m.display_name||m.email)+'</strong><div class="small">'+esc(m.email)+' · '+status+(self?' · החשבון שלך':'')+'</div></div>'+
+     '<div class="row"><span class="role '+(m.role==='super_admin'?'super':'')+'">'+role+'</span>'+
+     (canToggle?'<button class="btn secondary" data-toggle-member="'+m.id+'" data-status="'+m.status+'">'+(m.status==='disabled'?'הפעל מחדש':'השבת')+'</button>':'')+
+     '</div></div>';
+  }).join('');
+  app.innerHTML='<div class="top"><div><button class="btn secondary" id="teamBack">← Dashboard</button><h1>עובדי הארגון</h1><div class="small">רק סופר־מנהל פעיל יכול להזמין סופר־מנהלים נוספים.</div></div></div>'+
+   '<section class="card"><div class="content"><h2>הזמנת עובד</h2><div class="row"><div class="field grow"><label class="label" for="memberName">שם</label><input class="input" id="memberName" placeholder="למשל: דנה"></div><div class="field grow"><label class="label" for="memberEmail">אימייל</label><input class="input" id="memberEmail" type="email" placeholder="name@example.com"></div>'+
+   '<div class="field grow"><label class="label" for="memberRole">תפקיד</label><select class="select" id="memberRole"><option value="event_manager">מנהל אירועים</option><option value="super_admin">סופר־מנהל</option></select></div></div>'+
+   '<button class="btn" id="addMember">הוסף עובד</button><div class="help">לא נשלח אימייל אוטומטי. המשתמש ייצור חשבון עם אותו אימייל במסך הכניסה, ולאחר התחברות יצורף לארגון בתפקיד שהוגדר. סופר־מנהל יכול לנהל עובדים ועיצובים — כדאי לבחור רק משתמשים שאתה סומך עליהם.</div><div id="teamMessage" role="status" aria-live="polite"></div>'+
+   '<hr style="border:0;border-top:1px solid #eee;margin:24px 0"><h2>משתמשים</h2>'+items+'</div></section>';
   document.getElementById('teamBack').onclick=()=>go('/manager');
-  document.getElementById('addMember').onclick=async()=>{const name=document.getElementById('memberName').value.trim(),email=document.getElementById('memberEmail').value.trim().toLowerCase();if(!email)return alert('חסר אימייל');const {error}=await supabase.from('organization_members').insert({organization_id:ctx.member.organization_id,email,display_name:name||null,role:'event_manager',status:'invited',created_by_user_id:ctx.session.user.id});if(error)return alert(error.message);toast('העובד נוסף');renderTeam()};
-  document.querySelectorAll('[data-toggle-member]').forEach(b=>b.onclick=async()=>{const status=b.dataset.status==='disabled'?'invited':'disabled';const {error}=await supabase.from('organization_members').update({status,updated_at:new Date().toISOString()}).eq('id',b.dataset.toggleMember);if(error)return alert(error.message);toast(status==='disabled'?'העובד הושבת':'העובד הופעל');renderTeam()})
+  document.getElementById('addMember').onclick=async()=>{
+    const button=document.getElementById('addMember'),box=document.getElementById('teamMessage');
+    const name=document.getElementById('memberName').value.trim();
+    const email=document.getElementById('memberEmail').value.trim().toLowerCase();
+    const role=document.getElementById('memberRole').value;
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){box.className='msg err';box.textContent='יש להקליד כתובת אימייל תקינה';return}
+    if(!['event_manager','super_admin'].includes(role))return;
+    if(role==='super_admin'&&!confirm('להזמין את '+email+' כסופר־מנהל? תהיה לו גישה לניהול עובדי הארגון וספריית העיצובים.'))return;
+    button.disabled=true;box.textContent='';
+    const {error:insertError}=await supabase.from('organization_members').insert({
+      organization_id:ctx.member.organization_id,email,display_name:name||null,
+      role,status:'invited',created_by_user_id:ctx.session.user.id
+    });
+    if(insertError){box.className='msg err';box.textContent=insertError.code==='23505'?'כתובת האימייל כבר קיימת בארגון.':insertError.message;button.disabled=false;return}
+    toast('ההזמנה נשמרה');renderTeam();
+  };
+  document.querySelectorAll('[data-toggle-member]').forEach(b=>b.onclick=async()=>{
+    const status=b.dataset.status==='disabled'?'invited':'disabled';
+    if(status==='disabled'&&!confirm('להשבית את המשתמש?'))return;
+    b.disabled=true;
+    const {error:updateError}=await supabase.from('organization_members').update({status,updated_at:new Date().toISOString()})
+      .eq('id',b.dataset.toggleMember).eq('organization_id',ctx.member.organization_id);
+    if(updateError){alert(updateError.message);b.disabled=false;return}
+    toast(status==='disabled'?'המשתמש הושבת':'המשתמש הופעל');renderTeam();
+  });
 }
 
 async function renderOrgSettings(){
