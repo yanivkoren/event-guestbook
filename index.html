@@ -253,6 +253,7 @@ function renderEditor(){
     <div class="step ${step===4?'active':''}" data-pane="4"><h2>כרטיסי ברכה לאורחים</h2><p class="small">לאחר שליחה האורח ירכיב כרטיס אישי, יבחר גרסה וישמור קישור פרטי. ספר דיגיטלי ואישור מנהל יטופלו בנפרד.</p><div class="field"><label class="label">מכסת ניסיונות עיצוב (1–20)</label><input class="input" type="number" id="maxAttempts" min="1" max="20" value="${Number(editorState.output?.max_design_attempts||4)}"><span class="help">יצירת כרטיס ראשון ו״נסה עיצוב אחר״ צורכים ניסיון; תיקונים אינם צורכים ניסיון.</span></div><div class="field"><label class="label">עיצובים מותרים באירוע</label><p class="small">יצירת טמפלייטים נמצאת בספרייה המרכזית. כאן בוחרים לכל אירוע אילו שילובים ה־AI יוכל להציע לאורח.</p>
 ${editorState.templates.map(t=>`<div class="card-edit-panel"><label class="switchrow"><strong>${esc(t.name)}</strong><input type="checkbox" data-template="${esc(t.id)}" ${editorState.output?.card_template_ids?.includes(t.id)?'checked':''}></label>
 <div class="small">ערכות צבעים</div>${Object.entries(t.palettes).map(([id,p])=>`<label class="switchrow"><span>${esc(p.label||id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="palettes" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.palettes||Object.keys(t.palettes)).includes(id)?'checked':''}></label>`).join('')}
+<div class="card-edit-panel" data-event-palette="${esc(t.id)}"><label class="switchrow"><strong>פלטה ייחודית לאירוע</strong><input type="checkbox" data-event-palette-enabled="${esc(t.id)}" ${editorState.output?.card_design_rules?.[t.id]?.palettes?.includes('event_custom')?'checked':''}></label><p class="small">צבעים אלה יחולו רק באירוע הזה ולא ישנו את ספריית העיצובים. ניתן לאשר אותם לצד הפלטות הקיימות.</p><div class="row">${[['background','רקע','#f7f3ea'],['text','טקסט','#292d27'],['accent','הדגשה','#526b55'],['accent2','עיטור','#b77d56']].map(([key,label,fallback])=>`<div class="field grow"><label class="label">${label}</label><input class="input" type="color" data-event-color="${key}" value="${esc(editorState.output?.card_design_rules?.[t.id]?.event_palette?.[key]||fallback)}"></div>`).join('')}</div></div>
 <div class="small">מסגרות</div>${t.frame_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="frames" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.frames||t.frame_options).includes(id)?'checked':''}></label>`).join('')}
 <div class="small">עיטורים</div>${t.pattern_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="patterns" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.patterns||t.pattern_options).includes(id)?'checked':''}></label>`).join('')}
 <div class="small">גופנים</div>${t.typography_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="typography" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.typography||t.typography_options).includes(id)?'checked':''}></label>`).join('')}</div>`).join('')}
@@ -300,13 +301,25 @@ async function saveEditor(){
     for(const id of ids){
       const t=editorState.templates.find(x=>x.id===id);
       if(!t){alert('עיצוב לא נמצא בספרייה');return false}
-      const limits={palettes:Object.keys(t.palettes),frames:t.frame_options,patterns:t.pattern_options,typography:t.typography_options};
+      const customEnabled=!!document.querySelector('[data-event-palette-enabled="'+id+'"]')?.checked;
+      const customRoot=document.querySelector('[data-event-palette="'+id+'"]');
+      const colors={};
+      if(customEnabled){
+        for(const key of ['background','text','accent','accent2']){
+          const value=customRoot?.querySelector('[data-event-color="'+key+'"]')?.value;
+          if(!/^#[0-9a-fA-F]{6}$/.test(value||'')){alert('יש לבחור צבע תקין לפלטת האירוע');return false}
+          colors[key]=value;
+        }
+      }
+      const limits={palettes:[...Object.keys(t.palettes),...(customEnabled?['event_custom']:[])],frames:t.frame_options,patterns:t.pattern_options,typography:t.typography_options};
       const perTemplate={};
       for(const [kind,all] of Object.entries(limits)){
         const vals=[...document.querySelectorAll('[data-rule="'+id+'"][data-kind="'+kind+'"]:checked')].map(x=>x.value);
+        if(kind==='palettes'&&customEnabled)vals.push('event_custom');
         if(!vals.length||vals.some(x=>!all.includes(x))){alert('יש להשאיר לפחות אפשרות אחת בכל קבוצה של '+t.name);return false}
         perTemplate[kind]=vals;
       }
+      if(customEnabled)perTemplate.event_palette=colors;
       rules[id]=perTemplate;
     }
     const patch={card_template_ids:ids,card_default_template_id:ids[0],card_design_rules:rules,max_design_attempts:max,
