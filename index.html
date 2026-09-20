@@ -179,10 +179,11 @@ async function renderDashboard(){
   const ids=events.map(e=>e.id);let counts={};
   if(ids.length){const {data}=await supabase.from('submissions').select('event_id,moderation_status').in('event_id',ids).eq('status','submitted').is('deleted_at',null);for(const x of data||[]){counts[x.event_id]??={total:0,pending:0,approved:0,rejected:0};counts[x.event_id].total++;counts[x.event_id][x.moderation_status]++}}
   const cards=events.map(e=>{const c=counts[e.id]||{total:0,pending:0,approved:0,rejected:0};const state=eventOpenState(e);const date=e.event_date?new Date(e.event_date+'T12:00:00').toLocaleDateString('he-IL'):'';return `<article class="event-card"><div class="row" style="justify-content:space-between"><div><h3>${esc(e.title)}</h3><div class="small">${date?esc(date)+' · ':''}${state?esc(state)+' · ':''}<span class="event-link">${esc(e.slug)}</span></div></div><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span></div><div class="stats"><span class="pill">סה״כ ${c.total}</span><span class="pill">ממתינות ${c.pending}</span><span class="pill">אושרו ${c.approved}</span><span class="pill">נדחו ${c.rejected}</span></div><div class="row"><button class="btn secondary" data-edit="${e.id}">עריכה</button><button class="btn secondary" data-subs="${e.id}">שליחות</button>${e.status==='published'?`<button class="btn secondary" data-open="${esc(e.slug)}">עמוד אורחים</button><button class="btn secondary" data-copy="${esc(e.slug)}">העתקת קישור</button>`:''}</div></article>`}).join('');
-  app.innerHTML=`<div class="top"><div><div class="small">${esc(ctx.org?.name||'הארגון')} · ${ctx.member.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'} · ${esc(s.user.email||'')}</div><h1>אירועי הארגון</h1><div class="small">${events.length} אירועים</div><div class="navrow">${ctx.member.role==='super_admin'?'<button class="btn secondary" id="teamBtn">עובדים</button><button class="btn secondary" id="designLibraryBtn">ספריית עיצובים</button><button class="btn secondary" id="settingsBtn">הגדרות ארגון</button>':''}</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים בארגון. צור את האירוע הראשון.</div>'}</div>`;
+  app.innerHTML=`<div class="top"><div><div class="small">${esc(ctx.org?.name||'הארגון')} · ${ctx.member.role==='super_admin'?'סופר־מנהל':'מנהל אירועים'} · ${esc(s.user.email||'')}</div><h1>אירועי הארגון</h1><div class="small">${events.length} אירועים</div><div class="navrow">${ctx.member.role==='super_admin'?'<button class="btn secondary" id="teamBtn">עובדים</button><button class="btn secondary" id="trialMailboxBtn">תיבת דואר לבדיקות</button><button class="btn secondary" id="designLibraryBtn">ספריית עיצובים</button><button class="btn secondary" id="settingsBtn">הגדרות ארגון</button>':''}</div></div><div class="row"><button class="btn" id="newEvent">+ אירוע חדש</button><button class="btn secondary" id="logout">התנתקות</button></div></div><div class="grid">${cards||'<div class="msg">עדיין אין אירועים בארגון. צור את האירוע הראשון.</div>'}</div>`;
   const newBtn=document.getElementById('newEvent');newBtn.onclick=async()=>{newBtn.disabled=true;newBtn.textContent='יוצר...';await createEvent();newBtn.disabled=false;newBtn.textContent='+ אירוע חדש'};
   document.getElementById('logout').onclick=async()=>{await supabase.auth.signOut();orgContext=null;go('/manager')};
   document.getElementById('teamBtn')?.addEventListener('click',()=>go('/manager/team'));
+  document.getElementById('trialMailboxBtn')?.addEventListener('click',()=>go('/manager/test-mailbox'));
   document.getElementById('settingsBtn')?.addEventListener('click',()=>go('/manager/settings'));
   document.getElementById('designLibraryBtn')?.addEventListener('click',()=>go('/manager/designs'));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>go('/manager/event/'+b.dataset.edit));
@@ -354,6 +355,64 @@ async function renderSubmissions(eventId){
   document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=async()=>{const status=b.dataset.mod,id=b.dataset.id;b.disabled=true;const patch={moderation_status:status,moderated_at:status==='pending'?null:new Date().toISOString(),moderated_by_user_id:status==='pending'?null:s.user.id,updated_at:new Date().toISOString()};const {error}=await supabase.from('submissions').update(patch).eq('id',id).eq('event_id',eventId);if(error){alert(error.message);b.disabled=false}else{toast('הסטטוס עודכן');renderSubmissions(eventId)}})
 }
 
+
+async function trialMailboxRequest(method,payload){
+  const s=await session();
+  if(!s)throw new Error('ההתחברות פגה. התחבר מחדש.');
+  const r=await fetch(SUPABASE_URL+'/functions/v1/trial-mailbox',{
+    method,headers:{'Authorization':'Bearer '+s.access_token,'apikey':SUPABASE_KEY,...(method==='POST'?{'Content-Type':'application/json'}:{})},
+    ...(method==='POST'?{body:JSON.stringify(payload)}:{})
+  });
+  let result={};
+  try{result=await r.json()}catch{}
+  if(!r.ok)throw new Error(result.error||'אירעה שגיאה בתיבת הבדיקות');
+  return result;
+}
+async function renderTrialMailbox(){
+  const ctx=await requireOrg();if(!ctx)return;
+  if(ctx.member.role!=='super_admin'){go('/manager');return}
+  app.className='wrap';
+  app.innerHTML='<div class="loading">טוען תיבת דואר לבדיקות...</div>';
+  let data;
+  try{data=await trialMailboxRequest('GET')}catch(err){app.innerHTML='<div class="msg err">'+esc(err.message)+'</div><button class="btn secondary" id="backMailbox">חזרה</button>';document.getElementById('backMailbox').onclick=()=>go('/manager');return}
+  const accounts=data.accounts||[],messages=data.messages||[];
+  const accountById=Object.fromEntries(accounts.map(a=>[a.id,a]));
+  const rows=messages.map(m=>{
+    const email=accountById[m.account_id]?.email||'חשבון בדיקה';
+    return '<div class="member" style="display:block"><strong>'+esc(m.subject)+'</strong><div class="small">'+esc(email)+' · '+new Date(m.created_at).toLocaleString('he-IL')+'</div>'+
+      '<div class="row" style="margin-top:12px"><button class="btn secondary" data-copy-link="'+m.id+'">העתק קישור אישי</button></div></div>';
+  }).join('');
+  const accountRows=accounts.map(a=>'<div class="member"><div><strong>'+esc(a.email)+'</strong><div class="small">נוצר '+new Date(a.created_at).toLocaleString('he-IL')+'</div></div><button class="btn secondary" data-recovery-account="'+a.id+'">צור קישור איפוס</button></div>').join('');
+  app.innerHTML='<div class="top"><div><button class="btn secondary" id="backMailbox">← ניהול אירועים</button><h1>תיבת דואר לבדיקות</h1><div class="small">רק חשבונות בדיקה שאתה יוצר כאן. קישורים לא נשלחים באימייל.</div></div></div>'+
+    '<section class="card"><div class="content"><h2>יצירת חשבון בדיקה</h2><p class="help">החשבון ייווצר עם כתובת בדיקה המבוססת על האימייל שלך. לדוגמה, user+trial-one@example.com. התיבה והקישורים גלויים רק לסופר־המנהל שיצר את החשבון. לא להשתמש כאן בחשבונות עובדים אמיתיים.</p>'+
+    '<div class="row"><div class="field grow"><label class="label" for="trialLabel">שם בדיקה באנגלית (למשל one)</label><input class="input" id="trialLabel" maxlength="24" placeholder="one"></div><div class="field grow"><label class="label" for="trialRole">תפקיד בדיקה</label><select class="select" id="trialRole"><option value="event_manager">מנהל אירועים</option><option value="super_admin">סופר־מנהל</option></select></div></div><button class="btn" id="createTrialAccount">צור חשבון וקישור הפעלה</button><div class="help">מגבלה של 12 חשבונות בדיקה לסופר־מנהל. אין צורך בשליחת מייל או בדומיין.</div><div id="trialFeedback" role="status" aria-live="polite"></div>'+
+    '<hr style="border:0;border-top:1px solid #eee;margin:24px 0"><h2>חשבונות בדיקה</h2>'+(accountRows||'<p class="small">עדיין אין חשבונות בדיקה.</p>')+
+    '<hr style="border:0;border-top:1px solid #eee;margin:24px 0"><h2>הודעות וקישורי הפעלה ואיפוס</h2><p class="help">כל קישור מעניק גישה לחשבון הבדיקה שלו. העתק אותו ופתח בחלון גלישה פרטי, כדי לא להתנתק מחשבון המנהל שלך. אין לשתף את הקישורים או להדביק אותם בצ׳אט.</p>'+
+    (rows||'<p class="small">אין עדיין הודעות.</p>')+'</div></section>';
+  document.getElementById('backMailbox').onclick=()=>go('/manager');
+  const feedback=document.getElementById('trialFeedback');
+  const createButton=document.getElementById('createTrialAccount');
+  createButton.onclick=async()=>{
+    const label=document.getElementById('trialLabel').value.trim().toLowerCase();
+    const role=document.getElementById('trialRole').value;
+    if(!/^[a-z0-9][a-z0-9-]{1,23}$/.test(label)){feedback.className='msg err';feedback.textContent='בחר שם של 2–24 אותיות באנגלית, מספרים או מקפים.';return}
+    if(role==='super_admin'&&!confirm('ליצור חשבון בדיקה עם הרשאות סופר־מנהל?'))return;
+    createButton.disabled=true;feedback.textContent='יוצר חשבון בדיקה...';
+    try{await trialMailboxRequest('POST',{action:'create',label,role});renderTrialMailbox()}
+    catch(err){feedback.className='msg err';feedback.textContent=err.message;createButton.disabled=false}
+  };
+  document.querySelectorAll('[data-recovery-account]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('ליצור קישור איפוס חדש לחשבון הבדיקה?'))return;
+    b.disabled=true;
+    try{await trialMailboxRequest('POST',{action:'recovery',account_id:b.dataset.recoveryAccount});renderTrialMailbox()}
+    catch(err){feedback.className='msg err';feedback.textContent=err.message;b.disabled=false}
+  });
+  document.querySelectorAll('[data-copy-link]').forEach(b=>b.onclick=()=>{
+    const message=messages.find(m=>m.id===b.dataset.copyLink);
+    if(message)copyText(message.action_link);
+  });
+}
+
 async function renderTeam(){
   const ctx=await requireOrg();if(!ctx)return;
   if(ctx.member.role!=='super_admin'){go('/manager');return}
@@ -447,6 +506,7 @@ async function route(){
   if(path==='/manager/reset-password'){renderPasswordReset();return}
   if(path==='/manager'){await renderDashboard();return}
   if(path==='/manager/team'){await renderTeam();return}
+  if(path==='/manager/test-mailbox'){await renderTrialMailbox();return}
   if(path==='/manager/settings'){await renderOrgSettings();return}
   if(path==='/manager/designs'){const ctx=await requireOrg();if(ctx)await renderDesignLibrary({app,supabase,ctx,go});return}
   const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
