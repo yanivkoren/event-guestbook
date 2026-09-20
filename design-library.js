@@ -35,9 +35,27 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
   return '<div class="row">'+colors.map(([key,label])=>'<div class="field grow"><label class="label">'+label+'</label><input type="color" class="input" data-color="'+key+'" value="'+escape(conf[key]||'#ffffff')+'"></div>').join('')+'</div>';
  }
  function layoutInputs(conf){
-  const p=conf.layout?.photo||{},m=conf.layout?.message||{};
-  const fields=[['photo_x','תמונה X',p.x,0,850],['photo_y','תמונה Y',p.y,60,950],['photo_w','רוחב תמונה',p.w,160,1000],['photo_h','גובה תמונה',p.h,160,1000],['title_y','כותרת Y',conf.layout?.title?.y,60,600],['name_y','שם Y',conf.layout?.name?.y,100,1190],['message_top','תחילת ברכה',m.top,180,1190],['message_bottom','סיום ברכה',m.bottom,250,1250],['message_size','גודל ברכה',m.size,22,36]];
-  return '<p class="small">מיקום האזורים בקנבס 1080×1350. הגדרות ברכה ארוכה נשמרות במבנה.</p><div class="row">'+fields.map(([key,label,v,min,max])=>'<div class="field grow"><label class="label">'+label+'</label><input class="input" data-layout="'+key+'" type="number" min="'+min+'" max="'+max+'" value="'+escape(v??0)+'"></div>').join('')+'</div><div class="field"><label class="label">צורת תמונה</label><select id="photoShape" class="select">'+options([['rounded','מלבן מעוגל'],['ellipse','אליפסה']],p.shape)+'</select></div>';
+  const p=conf.layout?.photo||{},m=conf.layout?.message||{},e=conf.layout?.emoji||{};
+  const fields=[
+   ['photo_x','תמונה — מיקום אופקי (X)',p.x,0,850,'מספר הפיקסלים מהקצה השמאלי.'],
+   ['photo_y','תמונה — מיקום אנכי (Y)',p.y,60,950,'מספר הפיקסלים מהקצה העליון של אזור העיצוב.'],
+   ['photo_w','תמונה — רוחב',p.w,160,1000,'רוחב אזור התמונה בפיקסלים.'],
+   ['photo_h','תמונה — גובה',p.h,160,1000,'גובה אזור התמונה בפיקסלים.'],
+   ['title_y','כותרת האירוע — גובה',conf.layout?.title?.y,60,600,'נקודת ההתחלה של כותרת האירוע.'],
+   ['name_y','שם האורח — גובה',conf.layout?.name?.y,100,1190,'נקודת ההתחלה של שם המברך כשיש תמונה.'],
+   ['message_top','ברכה — התחלה',m.top,180,1190,'הגבול העליון של אזור הטקסט בכרטיס עם תמונה.'],
+   ['message_bottom','ברכה — סיום',m.bottom,250,1250,'הגבול התחתון של אזור הטקסט בכרטיס עם תמונה.'],
+   ['message_size','ברכה — גודל גופן',m.size,22,36,'גודל ברירת המחדל של טקסט הברכה.'],
+   ['emoji_y','אימוג׳י — גובה',e.y??1260,180,1290,'נקודת ההתחלה של האימוג׳י. יש להשאיר מקום לברכה ולתיאור התגובה.'],
+   ['emoji_size','אימוג׳י — גודל',e.size??60,20,80,'גודל האימוג׳י בפיקסלים.']
+  ];
+  const checks=[['title','כותרת האירוע','להציג כותרת בחלק העליון'],['photo','תמונה','להציג תמונת אורח כשיש תמונה'],['emoji','אימוג׳י','להציג את האימוג׳י שנבחר'],['reaction_label','תיאור התגובה','להציג כיתוב מתחת לאימוג׳י']];
+  return '<div class="field"><label class="label">יחס וגודל התוצר</label><select class="select" id="cardFormat">'+options([['4:5','4:5 — 1080×1350'],['9:16','9:16 — 1080×1920']],conf.format||'4:5')+'</select><p class="small">ב־9:16 האזור המעוצב נשאר במידותיו וממוקם במרכז הקנבס הארוך, בלי למתוח תמונה או טקסט.</p></div>'+
+   '<h3>רכיבים שיוצגו בכרטיס</h3><p class="small">שם האורח והברכה נשארים חובה כדי שלא יאבד תוכן שנשלח. אפשר להסתיר את הרכיבים הבאים:</p>'+
+   checks.map(([key,label,help])=>'<label class="switchrow"><span><strong>'+label+'</strong><br><span class="small">'+help+'</span></span><input type="checkbox" data-visible="'+key+'" '+(conf.layout?.visibility?.[key]===false?'':'checked')+'></label>').join('')+
+   '<h3>מיקום וגודל</h3><p class="small">כל הערכים נמדדים בפיקסלים ביחס לאזור העיצוב (1080×1350). בתצוגה קו מקווקו מסמן כל אזור גלוי.</p>'+
+   '<div class="row">'+fields.map(([key,label,value,min,max,help])=>'<div class="field grow"><label class="label">'+label+'</label><input class="input" data-layout="'+key+'" type="number" min="'+min+'" max="'+max+'" value="'+escape(value??0)+'"><p class="small">'+help+'</p></div>').join('')+'</div>'+
+   '<div class="field"><label class="label">צורת חלון התמונה</label><select id="photoShape" class="select">'+options([['rounded','מלבן עם פינות מעוגלות'],['ellipse','אליפסה']],p.shape)+'</select></div>';
  }
  function patternInputs(conf){
   return '<div class="field"><label class="label">צורת עיטור</label><select class="select" id="rendererPattern">'+options([['botanical','צמחי'],['modern','מודרני'],['confetti','קונפטי'],['none','ללא']],conf.renderer_id||'none')+'</select></div><div class="field"><label class="label">עיטור PNG שקוף (אופציונלי, עד 2MB)</label><input id="patternPng" type="file" accept="image/png"><p class="small">הקובץ משויך לעיטור הזה בלבד ויוצג בפינות כדי לא לכסות תמונה או ברכה.</p></div>'+(conf.asset_url?'<img class="thumb" style="max-height:130px;object-fit:contain" src="'+escape(conf.asset_url)+'" alt="עיטור קיים">':'');
@@ -58,12 +76,17 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
    conf.label=name;
   }else if(kind==='layout'){
    const v={};for(const field of app.querySelectorAll('[data-layout]')){const num=Number(field.value);if(!Number.isFinite(num)||num<Number(field.min)||num>Number(field.max))throw Error('מיקום או גודל לא תקין');v[field.dataset.layout]=num}
-   if(v.photo_x+v.photo_w>1050||v.photo_y+v.photo_h>1130)throw Error('התמונה חורגת מגבולות הכרטיס');
+   const shown=Object.fromEntries([...app.querySelectorAll('[data-visible]')].map(x=>[x.dataset.visible,x.checked]));
+   if(shown.photo&&(v.photo_x+v.photo_w>1050||v.photo_y+v.photo_h>1130))throw Error('התמונה חורגת מגבולות אזור העיצוב');
    if(v.message_bottom-v.message_top<100)throw Error('יש להשאיר לפחות 100px לברכה');
+   if(shown.emoji&&v.emoji_y+v.emoji_size>1350)throw Error('האימוג׳י חורג מגבולות הכרטיס');
+   conf.format=app.querySelector('#cardFormat').value;
+   conf.layout.visibility=shown;
    conf.layout.photo={...conf.layout.photo,x:v.photo_x,y:v.photo_y,w:v.photo_w,h:v.photo_h,shape:app.querySelector('#photoShape').value};
    conf.layout.title={...conf.layout.title,y:v.title_y};
    conf.layout.name={...conf.layout.name,y:v.name_y};
    conf.layout.message={...conf.layout.message,top:v.message_top,bottom:v.message_bottom,size:v.message_size};
+   conf.layout.emoji={...conf.layout.emoji,y:v.emoji_y,size:v.emoji_size};
    conf.layout_variants=conf.layout_variants||{};
    conf.layout_variants.photo={message_top:v.message_top,message_bottom:v.message_bottom};
    conf.layout_variants.photo_long={message_top:v.message_top,message_bottom:Math.max(v.message_bottom,1200)};
