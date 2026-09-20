@@ -24,19 +24,21 @@ export async function loadPhoto(url){
  const blob=await response.blob(),objectUrl=URL.createObjectURL(blob),img=new Image();
  try{img.src=objectUrl;await img.decode();return img}finally{URL.revokeObjectURL(objectUrl)}
 }
+function rendererPattern(t,d){return t.pattern_renderer_ids?.[d.pattern_id]||d.pattern_id}
+function rendererTypography(t,d){return t.font_renderer_ids?.[d.typography_id]||d.typography_id}
 function decorate(ctx,t,p,d){
  ctx.fillStyle=p.background;ctx.fillRect(0,0,CARD_WIDTH,CARD_HEIGHT);
  ctx.strokeStyle=p.accent;ctx.lineWidth=3;round(ctx,38,38,1004,1274,26);ctx.stroke();
  ctx.strokeStyle=p.accent2;ctx.lineWidth=1;round(ctx,55,55,970,1240,22);ctx.stroke();
- if(d.pattern_id==='none')return;
+ if(rendererPattern(t,d)==='none')return;
  ctx.save();ctx.globalAlpha=.75;
- if(d.pattern_id==='botanical'){
+ if(rendererPattern(t,d)==='botanical'){
   for(const sign of [1,-1]){ctx.save();ctx.translate(sign===1?70:1010,190);ctx.scale(sign,1);
    ctx.strokeStyle=p.accent2;ctx.fillStyle=p.accent2;ctx.lineWidth=3;
    ctx.beginPath();ctx.moveTo(0,0);ctx.bezierCurveTo(30,-45,65,-95,75,-150);ctx.stroke();
    for(let i=0;i<5;i++){const x=15+i*11,y=-20-i*28;ctx.beginPath();ctx.ellipse(x,y,11,21,-.6,0,Math.PI*2);ctx.fill()}
    ctx.restore();}
- }else if(d.pattern_id==='confetti'){
+ }else if(rendererPattern(t,d)==='confetti'){
   for(let i=0;i<24;i++){ctx.fillStyle=i%2?p.accent:p.accent2;ctx.beginPath();ctx.arc(80+(i*179)%915,74+(i*227)%1210,3+i%3,0,2*Math.PI);ctx.fill()}
  }else{
   ctx.fillStyle=p.accent2;ctx.fillRect(77,174,926,4);ctx.fillRect(77,1300,926,4);
@@ -95,11 +97,11 @@ function newPage(t,d){
 export async function renderCardPages({template,design,content,image}){
  validateDesign(template,design);await document.fonts.ready;
  if(!content.name?.trim())throw Error('חסר שם מברך');
- const p=template.palettes[design.palette],layout=template.layout,typ=TYPOGRAPHY[design.typography_id];
+ const p=template.palettes[design.palette],layout=template.layout,typ=TYPOGRAPHY[rendererTypography(template,design)];
  if(!typ)throw Error('גופן לא זמין');
  let decorative=null;
- if(template.decorative_asset_url){
-  try{decorative=await loadPhoto(template.decorative_asset_url)}catch(e){console.warn('Decorative asset unavailable; keeping content',e)}
+ if(template.pattern_asset_urls?.[design.pattern_id]||template.decorative_asset_url){
+  try{decorative=await loadPhoto(template.pattern_asset_urls?.[design.pattern_id]||template.decorative_asset_url)}catch(e){console.warn('Decorative asset unavailable; keeping content',e)}
  }
  const pages=[];let remaining=String(content.message||''),first=true;
  // Bound the loop and signal instead of ever dropping text silently.
