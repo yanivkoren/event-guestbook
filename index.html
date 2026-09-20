@@ -359,10 +359,15 @@ async function renderSubmissions(eventId){
 async function trialMailboxRequest(method,payload){
   const s=await session();
   if(!s)throw new Error('ההתחברות פגה. התחבר מחדש.');
-  const r=await fetch(SUPABASE_URL+'/functions/v1/trial-mailbox',{
-    method,headers:{'Authorization':'Bearer '+s.access_token,'apikey':SUPABASE_KEY,...(method==='POST'?{'Content-Type':'application/json'}:{})},
-    ...(method==='POST'?{body:JSON.stringify(payload)}:{})
-  });
+  let r;
+  try{
+    r=await fetch(SUPABASE_URL+'/functions/v1/trial-mailbox',{
+      method,headers:{'Authorization':'Bearer '+s.access_token,'apikey':SUPABASE_KEY,...(method==='POST'?{'Content-Type':'application/json'}:{})},
+      ...(method==='POST'?{body:JSON.stringify(payload)}:{})
+    });
+  }catch(err){
+    throw new Error('לא הצלחנו להתחבר לשרת תיבת הבדיקות. בדוק את החיבור לאינטרנט, רענן את הדף ונסה שוב. אם התקלה נמשכת, דווח לי שהקריאה נכשלה לפני שהתקבלה תשובת שרת.');
+  }
   let result={};
   try{result=await r.json()}catch{}
   if(!r.ok)throw new Error(result.error||'אירעה שגיאה בתיבת הבדיקות');
