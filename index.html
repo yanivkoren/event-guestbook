@@ -227,15 +227,16 @@ async function createEvent(){
 let editorState=null,step=1;
 async function loadEditor(id){
   const s=await requireSession();if(!s)return;
-  const [ev,ins,out,types,templates]=await Promise.all([
+  const [ev,ins,out,types,components,designSettings]=await Promise.all([
     supabase.from('events').select('*').eq('id',id).maybeSingle(),
     supabase.from('event_inputs').select('id,enabled,required,sort_order,label,placeholder,help_text,settings,input_types!inner(code,name,component_type,supports_required)').eq('event_id',id).order('sort_order'),
     supabase.from('event_output_config').select('*').eq('event_id',id).maybeSingle(),
     supabase.from('event_types').select('id,code,name').eq('is_active',true).order('sort_order'),
-    supabase.from('card_templates').select('id,name,palettes,frame_options,pattern_options,typography_options,organization_id').eq('active',true).order('id')
+    supabase.from('design_components').select('id,kind,name,config,revision,organization_id').eq('active',true).order('name'),
+    supabase.from('event_design_settings').select('*').eq('event_id',id).maybeSingle()
   ]);
   if(ev.error||!ev.data){app.innerHTML='<div class="msg err">אירוע לא נמצא</div>';return}
-  editorState={event:ev.data,inputs:(ins.data||[]).map(x=>({...x,input_type:Array.isArray(x.input_types)?x.input_types[0]:x.input_types})),output:out.data,types:types.data||[],templates:(templates.data||[]).filter(t=>!t.organization_id||t.organization_id===ev.data.organization_id)};
+  editorState={event:ev.data,inputs:(ins.data||[]).map(x=>({...x,input_type:Array.isArray(x.input_types)?x.input_types[0]:x.input_types})),output:out.data,types:types.data||[],components:(components.data||[]).filter(c=>!c.organization_id||c.organization_id===ev.data.organization_id),designSettings:designSettings.data};
   step=1;renderEditor()
 }
 
@@ -250,14 +251,9 @@ function renderEditor(){
     <div class="step ${step===1?'active':''}" data-pane="1"><div class="row"><div class="field grow"><label class="label">שם פנימי</label><input class="input" id="name" value="${esc(e.name)}"></div><div class="field grow"><label class="label">סוג אירוע</label><select class="select" id="eventType">${typeOptions}</select></div></div><div class="field"><label class="label">כותרת לאורחים</label><input class="input" id="title" value="${esc(e.title)}"></div><div class="field"><label class="label">תיאור</label><textarea class="textarea" id="description">${esc(e.description||'')}</textarea></div><div class="field"><label class="label">תאריך אירוע</label><input class="input" type="date" id="eventDate" value="${esc(e.event_date||'')}"></div></div>
     <div class="step ${step===2?'active':''}" data-pane="2"><div class="row"><div class="field grow"><label class="label">פתיחת שליחות</label><input class="input" type="datetime-local" id="startAt" value="${localInputValue(e.submission_start_at)}"></div><div class="field grow"><label class="label">סגירת שליחות</label><input class="input" type="datetime-local" id="endAt" value="${localInputValue(e.submission_end_at)}"></div></div><div class="field"><label class="label">כתובת האירוע</label><div class="row"><span class="small" style="padding-top:12px">/e/</span><input class="input grow" id="slug" value="${esc(e.slug)}"></div><span class="help">אותיות באנגלית, מספרים ומקפים בלבד.</span></div></div>
     <div class="step ${step===3?'active':''}" data-pane="3"><p class="small">שם אורח נשאר חובה. וידאו וציור שמורים במודל אך יופעלו בגרסה הבאה.</p>${inputRows}</div>
-    <div class="step ${step===4?'active':''}" data-pane="4"><h2>כרטיסי ברכה לאורחים</h2><p class="small">לאחר שליחה האורח ירכיב כרטיס אישי, יבחר גרסה וישמור קישור פרטי. ספר דיגיטלי ואישור מנהל יטופלו בנפרד.</p><div class="field"><label class="label">מכסת ניסיונות עיצוב (1–20)</label><input class="input" type="number" id="maxAttempts" min="1" max="20" value="${Number(editorState.output?.max_design_attempts||4)}"><span class="help">יצירת כרטיס ראשון ו״נסה עיצוב אחר״ צורכים ניסיון; תיקונים אינם צורכים ניסיון.</span></div><div class="field"><label class="label">עיצובים מותרים באירוע</label><p class="small">יצירת טמפלייטים נמצאת בספרייה המרכזית. כאן בוחרים לכל אירוע אילו שילובים ה־AI יוכל להציע לאורח.</p>
-${editorState.templates.map(t=>`<div class="card-edit-panel"><label class="switchrow"><strong>${esc(t.name)}</strong><input type="checkbox" data-template="${esc(t.id)}" ${editorState.output?.card_template_ids?.includes(t.id)?'checked':''}></label>
-<div class="small">ערכות צבעים</div>${Object.entries(t.palettes).map(([id,p])=>`<label class="switchrow"><span>${esc(p.label||id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="palettes" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.palettes||Object.keys(t.palettes)).includes(id)?'checked':''}></label>`).join('')}
-<div class="card-edit-panel" data-event-palette="${esc(t.id)}"><label class="switchrow"><strong>פלטה ייחודית לאירוע</strong><input type="checkbox" data-event-palette-enabled="${esc(t.id)}" ${editorState.output?.card_design_rules?.[t.id]?.palettes?.includes('event_custom')?'checked':''}></label><p class="small">צבעים אלה יחולו רק באירוע הזה ולא ישנו את ספריית העיצובים. ניתן לאשר אותם לצד הפלטות הקיימות.</p><div class="row">${[['background','רקע','#f7f3ea'],['text','טקסט','#292d27'],['accent','הדגשה','#526b55'],['accent2','עיטור','#b77d56']].map(([key,label,fallback])=>`<div class="field grow"><label class="label">${label}</label><input class="input" type="color" data-event-color="${key}" value="${esc(editorState.output?.card_design_rules?.[t.id]?.event_palette?.[key]||fallback)}"></div>`).join('')}</div></div>
-<div class="small">מסגרות</div>${t.frame_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="frames" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.frames||t.frame_options).includes(id)?'checked':''}></label>`).join('')}
-<div class="small">עיטורים</div>${t.pattern_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="patterns" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.patterns||t.pattern_options).includes(id)?'checked':''}></label>`).join('')}
-<div class="small">גופנים</div>${t.typography_options.map(id=>`<label class="switchrow"><span>${esc(id)}</span><input type="checkbox" data-rule="${esc(t.id)}" data-kind="typography" value="${esc(id)}" ${(editorState.output?.card_design_rules?.[t.id]?.typography||t.typography_options).includes(id)?'checked':''}></label>`).join('')}</div>`).join('')}
-<span class="help">חייב להישאר לפחות טמפלייט אחד וכל אחת מקבוצות האפשרויות שבו. הטמפלייט הראשון שנבחר יהיה ברירת המחדל.</span></div><div class="field"><label class="label">המלצת AI ועוזר כתיבה</label><div class="msg">כעת פועל Renderer דטרמיניסטי. ה־AI עדיין לא מחובר; הוא לא משנה תמונות או מלל.</div></div></div>
+    <div class="step ${step===4?'active':''}" data-pane="4"><h2>ספריות העיצוב של האירוע</h2><p class="small">בוחרים רכיבים עצמאיים מכל ספרייה. מנוע הכרטיסים ישלב מבנה, פלטה, עיטור וגופנים רק מתוך הבחירות שלכם.</p><div class="field"><label class="label">מספר ניסיונות עיצוב (1–20)</label><input class="input" type="number" id="maxAttempts" min="1" max="20" value="${Number(editorState.output?.max_design_attempts||4)}"></div>
+${[['layout','layouts','layout_ids','מבני כרטיס'],['palette','palettes','palette_ids','פלטות צבע'],['pattern','patterns','pattern_ids','עיטורים'],['font_set','font_sets','font_set_ids','שילובי גופנים']].map(([kind,key,col,title])=>`<section class="card-edit-panel" style="max-width:none"><h3>${title}</h3>${editorState.components.filter(c=>c.kind===kind).map(c=>`<label class="switchrow"><span>${esc(c.name)}</span><input type="checkbox" data-component-kind="${kind}" value="${esc(c.id)}" ${(editorState.designSettings?.[col]||[]).includes(c.id)?'checked':''}></label>`).join('')}<p class="small">ניתן להוסיף רכיבים חדשים דרך ספריית הרכיבים.</p></section>`).join('')}
+<section class="card-edit-panel" style="max-width:none"><label class="switchrow"><strong>פלטה ייחודית לאירוע</strong><input type="checkbox" id="customPaletteEnabled" ${editorState.designSettings?.custom_palette?'checked':''}></label><p class="small">הפלטה הזו זמינה רק באירוע הנוכחי ומשתלבת עם כל מבנה מאושר.</p><div class="row">${[['background','רקע','#f7f3ea'],['text','טקסט','#292d27'],['accent','הדגשה','#526b55'],['accent2','עיטור','#b77d56']].map(([key,label,fallback])=>`<div class="field grow"><label class="label">${label}</label><input class="input" type="color" data-custom-palette="${key}" value="${esc(editorState.designSettings?.custom_palette?.[key]||fallback)}"></div>`).join('')}</div></section><p class="small">יש לבחור לפחות מבנה אחד, עיטור אחד ושילוב גופנים אחד; וכן פלטה מהספרייה או פלטה ייחודית.</p></div>
     <div class="step ${step===5?'active':''}" data-pane="5"><div class="preview"><span class="badge ${esc(e.status)}">${formatStatus(e.status)}</span><h2>${esc(e.title)}</h2><p>${esc(e.description||'')}</p><p class="small">מצב: ${esc(eventOpenState(e)||'טיוטה')}</p><p class="small event-link">${esc(guestUrl(e.slug))}</p><div id="qr" class="qrbox"></div><div class="row" style="margin-top:14px"><button class="btn secondary" id="copyGuestLink">העתקת קישור</button><button class="btn secondary" id="downloadQr">הורדת QR</button><button class="btn secondary" id="previewGuest">פתיחת עמוד אורחים</button></div></div><div id="publishMsg" style="margin-top:14px"></div></div>
     <div class="actions"><button class="btn secondary" id="prev" ${step===1?'disabled':''}>הקודם</button><div class="row"><button class="btn secondary" id="save">שמירה</button>${step===5?`<button class="btn" id="publish">${e.status==='published'?'שמירה ופרסום מחדש':'פרסום האירוע'}</button>`:`<button class="btn" id="next">הבא</button>`}</div></div>
   </div></section>`;
@@ -293,37 +289,30 @@ async function saveEditor(){
     }
   }
   if(step===4&&editorState.output){
-    const ids=[...document.querySelectorAll('[data-template]:checked')].map(x=>x.dataset.template);
     const max=Number(document.getElementById('maxAttempts').value);
-    if(!ids.length){alert('יש לבחור לפחות עיצוב אחד');return false}
     if(!Number.isInteger(max)||max<1||max>20){alert('יש לבחור בין ניסיון אחד לעשרים');return false}
-    const rules={};
-    for(const id of ids){
-      const t=editorState.templates.find(x=>x.id===id);
-      if(!t){alert('עיצוב לא נמצא בספרייה');return false}
-      const customEnabled=!!document.querySelector('[data-event-palette-enabled="'+id+'"]')?.checked;
-      const customRoot=document.querySelector('[data-event-palette="'+id+'"]');
-      const colors={};
-      if(customEnabled){
-        for(const key of ['background','text','accent','accent2']){
-          const value=customRoot?.querySelector('[data-event-color="'+key+'"]')?.value;
-          if(!/^#[0-9a-fA-F]{6}$/.test(value||'')){alert('יש לבחור צבע תקין לפלטת האירוע');return false}
-          colors[key]=value;
-        }
-      }
-      const limits={palettes:[...Object.keys(t.palettes),...(customEnabled?['event_custom']:[])],frames:t.frame_options,patterns:t.pattern_options,typography:t.typography_options};
-      const perTemplate={};
-      for(const [kind,all] of Object.entries(limits)){
-        const vals=[...document.querySelectorAll('[data-rule="'+id+'"][data-kind="'+kind+'"]:checked')].map(x=>x.value);
-        if(kind==='palettes'&&customEnabled)vals.push('event_custom');
-        if(!vals.length||vals.some(x=>!all.includes(x))){alert('יש להשאיר לפחות אפשרות אחת בכל קבוצה של '+t.name);return false}
-        perTemplate[kind]=vals;
-      }
-      if(customEnabled)perTemplate.event_palette=colors;
-      rules[id]=perTemplate;
+    const groups={layout:'layout_ids',palette:'palette_ids',pattern:'pattern_ids',font_set:'font_set_ids'};
+    const chosen={};
+    for(const [kind,col] of Object.entries(groups)){
+      chosen[col]=[...document.querySelectorAll('[data-component-kind="'+kind+'"]:checked')].map(x=>x.value);
+      if(chosen[col].some(id=>!editorState.components.some(c=>c.id===id&&c.kind===kind))){alert('רכיב עיצוב אינו זמין');return false}
     }
-    const patch={card_template_ids:ids,card_default_template_id:ids[0],card_design_rules:rules,max_design_attempts:max,
-      post_submission_mode:'confirmation',generation_mode:'none',updated_at:new Date().toISOString()};
+    const useCustom=document.getElementById('customPaletteEnabled').checked;
+    if(!chosen.layout_ids.length||!chosen.pattern_ids.length||!chosen.font_set_ids.length||(!chosen.palette_ids.length&&!useCustom)){alert('יש להשאיר בחירה בכל ספרייה או פלטה ייחודית');return false}
+    let custom_palette=null;
+    if(useCustom){
+      custom_palette={label:'צבעי האירוע'};
+      for(const key of ['background','text','accent','accent2']){
+        const value=document.querySelector('[data-custom-palette="'+key+'"]')?.value;
+        if(!/^#[0-9a-fA-F]{6}$/.test(value||'')){alert('צבע לא תקין');return false}
+        custom_palette[key]=value;
+      }
+    }
+    const selection={event_id:e.id,...chosen,custom_palette,updated_at:new Date().toISOString()};
+    const saved=await supabase.from('event_design_settings').upsert(selection,{onConflict:'event_id'});
+    if(saved.error){alert(saved.error.message);return false}
+    editorState.designSettings=selection;
+    const patch={max_design_attempts:max,updated_at:new Date().toISOString()};
     const {error}=await supabase.from('event_output_config').update(patch).eq('event_id',e.id);
     if(error){alert(error.message);return false}Object.assign(editorState.output,patch);
   }
