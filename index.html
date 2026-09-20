@@ -37,7 +37,6 @@ a{color:inherit}.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { defaultCardConfig, renderGreetingCard, loadOriginalPhoto, downloadCard } from '/card-renderer.js';
 import { renderGuestCardPage } from '/guest-card-page.js';
 
 const SUPABASE_URL='https://zladqxbnakzgtwrogjfx.supabase.co';
@@ -270,11 +269,10 @@ async function renderSubmissions(eventId){
   const counts={all:rows.length,pending:0,approved:0,rejected:0};rows.forEach(r=>counts[r.moderation_status]++);
   const deletionQueue=(requests||[]).map(r=>{const row=rows.find(x=>x.id===r.submission_id);return `<article class="submission"><strong>${esc(row?.name||'אורח')}</strong><p class="small">${new Date(r.created_at).toLocaleString('he-IL')}</p><p>${esc(r.note||'בקשת הסרת הכרטיס האישי')}</p><div class="row"><button class="btn danger" data-resolve="${r.id}" data-decision="accepted">אשרו מחיקה</button><button class="btn secondary" data-resolve="${r.id}" data-decision="declined">דחו בקשה</button></div></article>`}).join('');
   const moderationAllowed=Date.now()>=new Date(e.submission_end_at).getTime();
-  const card=r=>`<article class="submission" data-status="${esc(r.moderation_status)}"><div class="sub-top"><div><strong>${esc(r.name||'ללא שם')}</strong><div class="small">${new Date(r.submitted_at).toLocaleString('he-IL')}</div></div><span class="badge status ${esc(r.moderation_status)}">${r.moderation_status==='approved'?'אושר':r.moderation_status==='rejected'?'נדחה':'ממתין'}</span></div>${r.greeting?`<p>${esc(r.greeting)}</p>`:''}${r.reaction?`<p>${esc(r.reaction)}</p>`:''}${r.media.map(m=>`<img class="thumb" src="${esc(m.url)}" alt="תמונה שצורפה לשליחה">`).join('')}<div class="row" style="margin-top:12px"><button class="btn" data-card="${r.id}">כרטיס ברכה</button>${moderationAllowed?`<button class="btn secondary" data-mod="approved" data-id="${r.id}" ${r.moderation_status==='approved'?'disabled':''}>✓ אישור</button><button class="btn secondary" data-mod="rejected" data-id="${r.id}" ${r.moderation_status==='rejected'?'disabled':''}>✕ דחייה</button><button class="btn secondary" data-mod="pending" data-id="${r.id}" ${r.moderation_status==='pending'?'disabled':''}>↺ להמתנה</button>`:''}</div></article>`;
+  const card=r=>`<article class="submission" data-status="${esc(r.moderation_status)}"><div class="sub-top"><div><strong>${esc(r.name||'ללא שם')}</strong><div class="small">${new Date(r.submitted_at).toLocaleString('he-IL')}</div></div><span class="badge status ${esc(r.moderation_status)}">${r.moderation_status==='approved'?'אושר':r.moderation_status==='rejected'?'נדחה':'ממתין'}</span></div>${r.greeting?`<p>${esc(r.greeting)}</p>`:''}${r.reaction?`<p>${esc(r.reaction)}</p>`:''}${r.media.map(m=>`<img class="thumb" src="${esc(m.url)}" alt="תמונה שצורפה לשליחה">`).join('')}<div class="row" style="margin-top:12px">${moderationAllowed?`<button class="btn secondary" data-mod="approved" data-id="${r.id}" ${r.moderation_status==='approved'?'disabled':''}>✓ אישור</button><button class="btn secondary" data-mod="rejected" data-id="${r.id}" ${r.moderation_status==='rejected'?'disabled':''}>✕ דחייה</button><button class="btn secondary" data-mod="pending" data-id="${r.id}" ${r.moderation_status==='pending'?'disabled':''}>↺ להמתנה</button>`:''}</div></article>`;
   app.innerHTML=`<div class="top"><div><button class="btn secondary" id="backEvent">← לאירוע</button><h1>שליחות — ${esc(e.title)}</h1><div class="small">${rows.length} שליחות</div></div><div class="row"><button class="btn secondary" id="copyLink">העתקת קישור</button><button class="btn secondary" id="guestPage">עמוד אורחים</button></div></div><div class="toolbar"><button class="filter active" data-filter="all">הכול ${counts.all}</button><button class="filter" data-filter="pending">ממתינות ${counts.pending}</button><button class="filter" data-filter="approved">אושרו ${counts.approved}</button><button class="filter" data-filter="rejected">נדחו ${counts.rejected}</button></div><div class="msg">${moderationAllowed?'חלון השליחה הסתיים; אישור כרטיסים לספר הדיגיטלי הוא תהליך נפרד.':'אישור הכרטיסים לצורך הספר הדיגיטלי יתאפשר רק אחרי סגירת חלון השליחה.'}</div><div id="subs">${rows.map(card).join('')||'<div class="msg">אין עדיין שליחות.</div>'}</div><section class="card" style="margin-top:24px"><div class="content"><h2>בקשות מחיקה ${(requests||[]).length}</h2>${deletionQueue||'<p class="small">אין בקשות מחיקה פתוחות.</p>'}</div></section>`;
   document.getElementById('backEvent').onclick=()=>go('/manager/event/'+eventId);document.getElementById('guestPage').onclick=()=>window.open('/e/'+e.slug,'_blank');document.getElementById('copyLink').onclick=()=>copyText(guestUrl(e.slug));
   document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));const f=b.dataset.filter;document.querySelectorAll('.submission').forEach(c=>c.style.display=f==='all'||c.dataset.status===f?'':'none')});
-  document.querySelectorAll('[data-card]').forEach(b=>b.onclick=()=>go('/manager/event/'+eventId+'/card/'+b.dataset.card));
   document.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=async()=>{
     const decision=b.dataset.decision;
     if(decision==='accepted'&&!confirm('אישור הבקשה יסיר את הברכה מהגישה האישית. להמשיך?'))return;
@@ -283,96 +281,6 @@ async function renderSubmissions(eventId){
     if(error){alert(error.message);b.disabled=false}else{toast('בקשת המחיקה עודכנה');renderSubmissions(eventId)}
   });
   document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=async()=>{const status=b.dataset.mod,id=b.dataset.id;b.disabled=true;const patch={moderation_status:status,moderated_at:status==='pending'?null:new Date().toISOString(),moderated_by_user_id:status==='pending'?null:s.user.id,updated_at:new Date().toISOString()};const {error}=await supabase.from('submissions').update(patch).eq('id',id).eq('event_id',eventId);if(error){alert(error.message);b.disabled=false}else{toast('הסטטוס עודכן');renderSubmissions(eventId)}})
-}
-
-// Content remains in submission_values and the untouched guest-media object.
-// greeting_cards stores only chosen design, crop coordinates and optional text edits.
-async function renderCardEditor(eventId,submissionId){
- const ctx=await requireOrg();if(!ctx)return;
- app.className='wrap';app.innerHTML='<div class="loading">טוען כרטיס ברכה...</div>';
- const [{data:event,error:eventError},{data:submission,error:submissionError},{data:catalog,error:catalogError},{data:config},{data:existing}]=await Promise.all([
- supabase.from('events').select('id,title,slug').eq('id',eventId).maybeSingle(),
- supabase.from('submissions').select('id,event_id,submission_values(text_value,json_value,event_inputs(input_types(code))),media(id,media_type,storage_key)').eq('id',submissionId).eq('event_id',eventId).maybeSingle(),
- supabase.from('card_templates').select('*').eq('active',true),
- supabase.from('event_output_config').select('card_template_ids,card_default_template_id').eq('event_id',eventId).maybeSingle(),
- supabase.from('greeting_cards').select('*').eq('submission_id',submissionId).maybeSingle()
- ]);
- if(eventError||submissionError||catalogError||!event||!submission){app.innerHTML='<div class="msg err">לא ניתן לפתוח את כרטיס הברכה.</div>';return}
- const allowed=(catalog||[]).filter(t=>(config?.card_template_ids||[]).includes(t.id));
- if(!allowed.length){app.innerHTML='<div class="msg err">אין עיצובים זמינים לאירוע.</div>';return}
- const raw={title:event.title,name:'',message:'',emoji:''};
- for(const v of submission.submission_values||[]){
-  const ei=Array.isArray(v.event_inputs)?v.event_inputs[0]:v.event_inputs;
-  const it=Array.isArray(ei?.input_types)?ei.input_types[0]:ei?.input_types;
-  if(it?.code==='guest_name')raw.name=v.text_value||'';
-  if(it?.code==='long_text')raw.message=v.text_value||'';
-  if(it?.code==='reaction'){const a=v.json_value?.selected?.[0];raw.emoji=a?.emoji||''}
- }
- const photo=(submission.media||[]).find(m=>m.media_type==='image');
- let image=null;
- if(photo){
-  const {data,error}=await supabase.storage.from('guest-media').createSignedUrl(photo.storage_key,3600);
-  if(error||!data?.signedUrl){app.innerHTML='<div class="msg err">לא ניתן לגשת לתמונת המקור.</div>';return}
-  try{image=await loadOriginalPhoto(data.signedUrl)}catch(error){app.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return}
- }
- let chosen=allowed.find(t=>t.id===existing?.template_id)||allowed.find(t=>t.id===config?.card_default_template_id)||allowed[0];
- let design={...defaultCardConfig(chosen),...(existing?{template_id:existing.template_id,palette:existing.palette,frame:existing.frame,crop_strategy:existing.crop_strategy,photo_position:existing.photo_position,crop_x:Number(existing.crop_x),crop_y:Number(existing.crop_y)}:{})};
- let overrides={...(existing?.content_overrides||{})};
- let lastCanvas=null,revision=0;
- const palettes=()=>Object.entries(chosen.palettes).map(([id,p])=>`<option value="${esc(id)}" ${id===design.palette?'selected':''}>${esc(p.label||id)}</option>`).join('');
- const frames=()=>chosen.frame_options.map(id=>`<option value="${esc(id)}" ${id===design.frame?'selected':''}>${id==='rounded_gold'?'מסגרת מודגשת':id==='thin'?'מסגרת עדינה':'ללא מסגרת'}</option>`).join('');
- const crops=()=>chosen.crop_strategies.map(id=>`<option value="${esc(id)}" ${id===design.crop_strategy?'selected':''}>${({center:'מרכז',top:'למעלה',bottom:'למטה',left:'שמאלה',right:'ימינה'})[id]||esc(id)}</option>`).join('');
- function renderControls(){
-  app.innerHTML=`<div class="top"><div><button class="btn secondary" id="cardBack">← לשליחות</button><h1>כרטיס ברכה</h1><div class="small">התמונה המקורית והטקסט המקורי נשמרים ללא שינוי. השינויים כאן הם לכרטיס בלבד.</div></div></div>
-  <div class="grid"><section class="card"><div class="content"><div id="cardMessage" aria-live="polite"></div><div id="cardPreview" class="center loading">מרנדר כרטיס...</div><div class="row"><button class="btn" id="cardDownload" disabled>הורדת PNG</button><button class="btn secondary" id="cardSave">שמירת עיצוב</button></div></div></section>
-  <section class="card"><div class="content card-controls"><h2>עיצוב</h2>
-   <div class="field"><label class="label">Template</label><select class="select" id="cardTemplate">${allowed.map(t=>`<option value="${esc(t.id)}" ${t.id===chosen.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
-   <div class="field"><label class="label">Palette</label><select class="select" id="cardPalette">${palettes()}</select></div>
-   <div class="field"><label class="label">מסגרת</label><select class="select" id="cardFrame">${frames()}</select></div>
-   <div class="field"><label class="label">חיתוך תמונה</label><select class="select" id="cardCrop">${crops()}</select></div>
-   <div class="field"><label class="label">מיקום אופקי של התמונה</label><input class="input" type="range" min="0" max="1" step=".01" id="cardCropX" value="${design.crop_x}"></div>
-   <div class="field"><label class="label">מיקום אנכי של התמונה</label><input class="input" type="range" min="0" max="1" step=".01" id="cardCropY" value="${design.crop_y}"></div>
-   <button class="btn secondary" id="cardAnother">נסה עיצוב אחר</button>
-   <h2>תוכן הכרטיס</h2><p class="small">כאן אפשר לערוך את מה שמופיע בכרטיס בלבד, בלי לשנות את השליחה המקורית.</p>
-   <div class="field"><label class="label">כותרת</label><input class="input" id="cardTitle" maxlength="200" value="${esc(overrides.title??raw.title)}"></div>
-   <div class="field"><label class="label">שם המברך</label><input class="input" id="cardName" maxlength="100" value="${esc(overrides.name??raw.name)}"></div>
-   <div class="field"><label class="label">ברכה</label><textarea class="textarea" id="cardGreeting" maxlength="2000">${esc(overrides.message??raw.message)}</textarea></div>
-   <div class="field"><label class="label">Emoji</label><input class="input" id="cardEmoji" maxlength="30" value="${esc(overrides.emoji??raw.emoji)}"></div>
-   <button class="btn secondary" id="cardReset">חזרה למלל המקורי</button>
-  </div></section></div>`;
-  document.getElementById('cardBack').onclick=()=>go('/manager/event/'+eventId+'/submissions');
-  const update=(key,val)=>{design[key]=val;draw()};
-  document.getElementById('cardTemplate').onchange=e=>{chosen=allowed.find(t=>t.id===e.target.value)||chosen;design={...defaultCardConfig(chosen),crop_x:design.crop_x,crop_y:design.crop_y};renderControls();draw()};
-  document.getElementById('cardPalette').onchange=e=>update('palette',e.target.value);
-  document.getElementById('cardFrame').onchange=e=>update('frame',e.target.value);
-  document.getElementById('cardCrop').onchange=e=>{const p={center:[.5,.5],top:[.5,0],bottom:[.5,1],left:[0,.5],right:[1,.5]}[e.target.value]||[.5,.5];design.crop_strategy=e.target.value;design.crop_x=p[0];design.crop_y=p[1];document.getElementById('cardCropX').value=p[0];document.getElementById('cardCropY').value=p[1];draw()};
-  for(const axis of ['X','Y'])document.getElementById('cardCrop'+axis).oninput=e=>update('crop_'+axis.toLowerCase(),Number(e.target.value));
-  for(const [id,key] of [['cardTitle','title'],['cardName','name'],['cardGreeting','message'],['cardEmoji','emoji']]){
-   document.getElementById(id).oninput=e=>{overrides[key]=e.target.value;draw()}
-  }
-  document.getElementById('cardAnother').onclick=()=>{const i=allowed.findIndex(t=>t.id===chosen.id);chosen=allowed[(i+1)%allowed.length];design={...defaultCardConfig(chosen),crop_x:design.crop_x,crop_y:design.crop_y};renderControls();draw()};
-  document.getElementById('cardReset').onclick=()=>{overrides={};renderControls();draw()};
-  document.getElementById('cardDownload').onclick=()=>{if(lastCanvas)downloadCard(lastCanvas,'greeting-'+submissionId.slice(0,8)+'.png')};
-  document.getElementById('cardSave').onclick=async()=>{
-   const btn=document.getElementById('cardSave');btn.disabled=true;
-   const payload={submission_id:submissionId,...design,content_overrides:overrides,updated_by_user_id:ctx.session.user.id,updated_at:new Date().toISOString()};
-   const {error}=await supabase.from('greeting_cards').upsert(payload,{onConflict:'submission_id'});
-   btn.disabled=false;
-   if(error)document.getElementById('cardMessage').innerHTML=`<div class="msg err">${esc(error.message)}</div>`;
-   else document.getElementById('cardMessage').innerHTML='<div class="msg ok">העיצוב נשמר. תמונת המקור והשליחה המקורית לא שונו.</div>';
-  };
- }
- async function draw(){
-  const current=++revision,spot=document.getElementById('cardPreview'),dl=document.getElementById('cardDownload');
-  if(!spot)return;dl.disabled=true;spot.textContent='מרנדר כרטיס...';spot.className='center loading';
-  try{
-   const content={...raw,...overrides};
-   const canvas=await renderGreetingCard({template:chosen,config:design,content,image});
-   if(current!==revision)return;
-   lastCanvas=canvas;spot.textContent='';spot.className='';canvas.className='card-preview';spot.appendChild(canvas);dl.disabled=false;
-  }catch(error){if(current!==revision)return;lastCanvas=null;spot.className='msg err';spot.textContent=error.message}
- }
- renderControls();await draw();
 }
 
 async function renderTeam(){
@@ -408,7 +316,6 @@ async function route(){
   if(path==='/manager'){await renderDashboard();return}
   if(path==='/manager/team'){await renderTeam();return}
   if(path==='/manager/settings'){await renderOrgSettings();return}
-  const cm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/card\/([0-9a-f-]{36})$/i);if(cm){await renderCardEditor(cm[1],cm[2]);return}
   const sm=path.match(/^\/manager\/event\/([0-9a-f-]{36})\/submissions$/i);if(sm){await renderSubmissions(sm[1]);return}
   const em=path.match(/^\/manager\/event\/([0-9a-f-]{36})$/i);if(em){await loadEditor(em[1]);return}
   const pc=path.match(/^\/card\/([0-9a-f]{64})$/i);if(pc){await renderGuestCardPage({token:pc[1],app,api:CARD_API,go});return}
