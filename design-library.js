@@ -97,7 +97,10 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
    conf.layout_variants.photo={message_top:v.message_top,message_bottom:v.message_bottom};
    conf.layout_variants.photo_long={message_top:v.message_top,message_bottom:Math.max(v.message_bottom,1200)};
   }else if(kind==='pattern')conf.renderer_id=app.querySelector('#rendererPattern').value;
-  else conf.renderer_id=app.querySelector('#rendererFont').value;
+  else{
+   conf.renderer_id=app.querySelector('#rendererFont').value;
+   if(conf.renderer_id!=='uploaded')delete conf.asset_url;
+  }
   return {...item,name,config:conf,active:app.querySelector('#componentActive').checked};
  }
  function examplePhoto(){
@@ -174,6 +177,20 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
      if(uploaded.error)throw Error(uploaded.error.message);
      config.asset_url=supabase.storage.from('design-assets').getPublicUrl(path).data.publicUrl;
     }
+    if(config.renderer_id==='uploaded'&&!config.asset_url)throw Error('בחר עיטור PNG להעלאה.');
+   }
+   if(kind==='font_set'){
+    const file=app.querySelector('#fontFile')?.files?.[0];
+    if(file&&config.renderer_id==='uploaded'){
+     const ext=(file.name.split('.').pop()||'').toLowerCase();
+     const mime={woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf'}[ext];
+     if(!mime||file.size>2*1024*1024||file.size===0)throw Error('יש לבחור קובץ גופן WOFF2, WOFF, TTF או OTF עד 2MB');
+     const path=org+'/'+id+'/'+crypto.randomUUID()+'.'+ext;
+     const uploaded=await supabase.storage.from('design-assets').upload(path,file,{contentType:mime,upsert:false});
+     if(uploaded.error)throw Error(uploaded.error.message);
+     config.asset_url=supabase.storage.from('design-assets').getPublicUrl(path).data.publicUrl;
+    }
+    if(config.renderer_id==='uploaded'&&!config.asset_url)throw Error('בחר קובץ גופן כדי להוסיף גופן חדש.');
    }
    const payload={name:edited.name,kind,active:edited.active,config,revision:existing?(item.revision||1)+1:1,updated_at:new Date().toISOString()};
    let error;
