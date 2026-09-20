@@ -28,6 +28,7 @@ export async function renderGuestCardPage({token,app,api,go}){
   ||available.find(t=>t.id===data.default_template_id)||available[0];
  if(!template){app.innerHTML='<div class="msg err">לא הוגדר עיצוב לכרטיס.</div>';return}
  let design={...defaultDesign(template),...(selected?.design_snapshot||{})};
+ let editableBaseVersionId=selected?.id||data.versions[data.versions.length-1]?.id||null;
  let previewPages=[],isBusy=false,revision=0;
  const active=!!data.can_edit;
  const attempts=()=>data.design_attempts_used;
@@ -83,18 +84,18 @@ export async function renderGuestCardPage({token,app,api,go}){
   isBusy=true;notice('שומר את הגרסה...');try{
    const pages=await renderCardPages({template,design,content:draftContent,image:photo});
    const files=await cardFiles(pages);const form=new FormData();
-   form.set('configuration',JSON.stringify({creation_kind:kind,content:draftContent,design}));
+   form.set('configuration',JSON.stringify({creation_kind:kind,source_version_id:kind==='edit'?editableBaseVersionId:null,content:draftContent,design}));
    files.forEach(f=>form.append('page',f));
    await request('version','POST',form);
    data=await request('state');selected=data.versions.find(x=>x.id===data.selected_version_id);
    notice('הגרסה נשמרה. בחרו אותה כדי לאשר את הכרטיס.');
-   mount();const last=data.versions[data.versions.length-1];showStored(last);
+   const last=data.versions[data.versions.length-1];editableBaseVersionId=last.id;mount();showStored(last);
   }catch(e){notice(e.message)}finally{isBusy=false}
  }
  async function selectVersion(id){
   if(!active||isBusy)return;
   isBusy=true;try{await request('select','POST',{version_id:id});data=await request('state');selected=data.versions.find(v=>v.id===id);draftContent={...selected.content_snapshot};
-   template=data.templates.find(t=>t.id===selected.design_snapshot.template_id)||template;design={...selected.design_snapshot};
+   template=data.templates.find(t=>t.id===selected.design_snapshot.template_id)||template;design={...selected.design_snapshot};editableBaseVersionId=selected.id;
    mount();showStored(selected);notice('הגרסה אושרה ונבחרה. זה הקישור האישי שלך — שמרו אותו ואל תשתפו אותו.');
   }catch(e){notice(e.message)}finally{isBusy=false}
  }
@@ -131,7 +132,7 @@ export async function renderGuestCardPage({token,app,api,go}){
    '<div class="row" style="margin-top:12px"><button class="btn secondary" id="previewCard">תצוגה מקדימה</button>'+
    '<button class="btn" id="saveCard">'+(data.versions.length?'שמירת תיקון כגרסה חדשה':'יצירת כרטיס ראשון')+'</button>'+
    '<button class="btn secondary" id="differentCard" '+(attempts()>=data.max_design_attempts?'disabled':'')+'>נסה עיצוב אחר</button></div>'+
-   '<p class="help">החלפת עיצוב אוטומטית בסיסית; המלצות AI עדיין אינן מחוברות.</p>'+
+   '<p class="help">שינוי עיצוב צורך ניסיון נוסף. תיקון מלל או חיתוך בלבד אינו צורך ניסיון. המלצות AI עדיין אינן מחוברות.</p>'+
    '</div></section>':'<div></div>')+'</div>'+
    '<h2>הגרסאות שלי</h2><div id="cardHistory" class="grid"></div>'+
    (active?'<div class="row" style="margin-top:24px"><button class="btn danger" id="deleteOwn">מחיקת הברכה</button></div>':
