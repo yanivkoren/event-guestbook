@@ -27,7 +27,23 @@ a{color:inherit}.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
 .submission{background:#fff;border:1px solid #ddd;border-radius:16px;padding:18px;margin-bottom:12px}.sub-top{display:flex;justify-content:space-between;gap:10px}.thumb{width:100%;max-height:420px;object-fit:contain;border-radius:12px;background:#f3f3f3;margin-top:10px}
 .status.pending{background:#fff7d6;color:#765b00}.status.approved{background:#e9f8ed;color:#19642c}.status.rejected{background:#feecec;color:#8e1e1e}
 .auth{max-width:460px;margin:60px auto}.center{text-align:center}.qrbox{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:16px}.qr{background:#fff;padding:10px;border:1px solid #ddd;border-radius:12px}
-.loading{padding:50px;text-align:center;color:#666}.card-preview{width:100%;max-width:420px;display:block;margin:12px auto;border-radius:12px;box-shadow:0 5px 25px #0002}.card-preview{display:block;width:100%;max-width:420px;margin:12px auto;border-radius:12px;box-shadow:0 5px 25px #0002}.card-controls{max-width:540px;margin:0 auto}.card-controls .field{margin-bottom:13px}.card-controls .row>*{flex:1;min-width:120px}
+.loading{padding:50px;text-align:center;color:#666}
+.personal-card-page{max-width:760px}.personal-card-shell{border-radius:24px}.personal-card-shell>.content{padding:clamp(16px,4vw,32px)}
+.personal-card-page h1{margin:4px 0 8px}.personal-card-image{max-width:520px;margin:20px auto 10px}
+.card-page{text-align:center;margin-bottom:12px}.card-page .card-preview{max-width:100%;width:100%;margin:0 auto 6px}
+.personal-actions{max-width:520px;margin:18px auto 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.personal-actions .btn:first-child{grid-column:1/-1}.personal-actions .btn{min-width:0}
+.card-notice{max-width:520px;min-height:24px;margin:8px auto;text-align:center;font-size:14px;color:#4c594a}
+.card-edit-panel{max-width:520px;margin:22px auto;padding:20px;border:1px solid #e3e3e3;border-radius:16px;background:#fafaf8}
+.card-older{max-width:520px;margin:26px auto;border-top:1px solid #eee;padding-top:16px}
+.card-older summary{font-weight:700;cursor:pointer;list-style:revert}
+.card-version-list{display:flex;gap:10px;overflow-x:auto;padding:15px 0}
+.card-version{background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px;min-width:120px;width:120px;cursor:pointer;text-align:center;font-size:12px}
+.card-version.current{border:2px solid #222}.card-version img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px}
+.card-private-tools{max-width:520px;margin:32px auto 0;padding-top:18px;border-top:1px solid #eee;display:flex;gap:12px;flex-wrap:wrap}
+.card-private-tools p{flex:0 0 100%;margin:0}.card-private-tools .btn.danger{margin-inline-start:auto}
+@media(max-width:460px){.personal-actions{grid-template-columns:1fr}.personal-actions .btn:first-child{grid-column:auto}.card-private-tools .btn{flex:1}}
+.card-preview{width:100%;max-width:420px;display:block;margin:12px auto;border-radius:12px;box-shadow:0 5px 25px #0002}.card-preview{display:block;width:100%;max-width:420px;margin:12px auto;border-radius:12px;box-shadow:0 5px 25px #0002}.card-controls{max-width:540px;margin:0 auto}.card-controls .field{margin-bottom:13px}.card-controls .row>*{flex:1;min-width:120px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 18px}.filter{border:1px solid #ddd;background:#fff;border-radius:999px;padding:8px 12px;cursor:pointer}.filter.active{background:#111;color:#fff;border-color:#111}.event-link{direction:ltr;text-align:left;word-break:break-all}.notice{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 16px;border-radius:999px;z-index:50;box-shadow:0 8px 24px #0003}.muted{opacity:.65}.member{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid #eee}.member:last-child{border-bottom:0}.role{background:#eee;border-radius:999px;padding:5px 8px;font-size:12px;font-weight:700}.role.super{background:#efe7ff;color:#5b2b8a}.navrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding-top:14px}.actions .btn{flex:1}.top{align-items:flex-start}}
 </style>
