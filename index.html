@@ -131,10 +131,44 @@ async function renderGuest(slug){
 
 function renderAuth(){
   app.className='wrap auth';
-  app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">כניסה לעובדי הארגון</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">הפעלת חשבון עובד</button></div></div></section>`;
+  app.innerHTML=`<section class="card"><div class="content"><div class="center"><h1>ניהול אירועים</h1><p class="small">כניסה לעובדי הארגון</p></div><div id="authMsg"></div><div class="field"><label class="label">אימייל</label><input class="input" id="email" type="email" autocomplete="email"></div><div class="field"><label class="label">סיסמה</label><input class="input" id="password" type="password" minlength="6" autocomplete="current-password"></div><div class="row"><button class="btn grow" id="signIn">התחברות</button><button class="btn secondary grow" id="signUp">הפעלת חשבון עובד</button></div><div class="row" style="margin-top:12px"><button class="btn secondary" id="forgotPassword">שכחתי סיסמה</button></div></div></section>`;
   const msg=t=>document.getElementById('authMsg').innerHTML=`<div class="msg">${esc(t)}</div>`;
   document.getElementById('signIn').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return msg(error.message);orgContext=null;go('/manager')};
   document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<6)return msg('יש להזין אימייל וסיסמה של לפחות 6 תווים.');const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session){orgContext=null;go('/manager')}else msg('החשבון נוצר. אם נשלח מייל אימות, יש לאשר אותו ואז להתחבר. הגישה תיפתח רק אם הסופר־מנהל הגדיר את האימייל הזה כעובד.')};
+  document.getElementById('forgotPassword').onclick=async()=>{
+    const email=document.getElementById('email').value.trim().toLowerCase(),button=document.getElementById('forgotPassword');
+    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))return msg('יש להזין כתובת אימייל תקינה כדי לאפס סיסמה.');
+    button.disabled=true;
+    const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/manager/reset-password'});
+    button.disabled=false;
+    if(error)return msg('לא ניתן לשלוח כרגע מייל איפוס. נסה שוב בעוד כמה דקות. '+error.message);
+    msg('אם קיים חשבון עבור האימייל הזה, יישלח אליו קישור לאיפוס סיסמה. בדוק גם בדואר הזבל. הקישור מיועד לעובד בלבד ואין להעבירו לאחרים.');
+  };
+}
+
+let passwordRecoveryConfirmed=false;
+function renderPasswordReset(){
+  app.className='wrap auth';
+  if(!passwordRecoveryConfirmed){
+    app.innerHTML='<section class="card"><div class="content"><h1>איפוס סיסמה</h1><div class="msg">כדי להגדיר סיסמה חדשה, יש לפתוח את הקישור שנשלח לאימייל. אם הקישור פג תוקף, בקש קישור חדש במסך ההתחברות.</div><button class="btn secondary" id="resetBack">חזרה להתחברות</button></div></section>';
+    document.getElementById('resetBack').onclick=()=>go('/manager');
+    return;
+  }
+  app.innerHTML='<section class="card"><div class="content"><h1>הגדרת סיסמה חדשה</h1><div id="resetMsg" role="status" aria-live="polite"></div><div class="field"><label class="label" for="newPassword">סיסמה חדשה (לפחות 8 תווים)</label><input class="input" id="newPassword" type="password" autocomplete="new-password" minlength="8"></div><div class="field"><label class="label" for="confirmPassword">אימות סיסמה</label><input class="input" id="confirmPassword" type="password" autocomplete="new-password" minlength="8"></div><button class="btn" id="saveNewPassword">שמירת סיסמה חדשה</button></div></section>';
+  document.getElementById('saveNewPassword').onclick=async()=>{
+    const password=document.getElementById('newPassword').value,confirmation=document.getElementById('confirmPassword').value;
+    const msg=document.getElementById('resetMsg'),button=document.getElementById('saveNewPassword');
+    msg.textContent='';
+    if(password.length<8){msg.textContent='יש לבחור סיסמה של לפחות 8 תווים.';return}
+    if(password!==confirmation){msg.textContent='הסיסמאות אינן זהות.';return}
+    button.disabled=true;
+    const {error}=await supabase.auth.updateUser({password});
+    if(error){msg.textContent='איפוס הסיסמה נכשל: '+error.message;button.disabled=false;return}
+    passwordRecoveryConfirmed=false;
+    await supabase.auth.signOut();orgContext=null;
+    app.innerHTML='<section class="card"><div class="content"><div class="msg ok">הסיסמה עודכנה. אפשר להתחבר עם הסיסמה החדשה.</div><button class="btn" id="returnToLogin">מעבר להתחברות</button></div></section>';
+    document.getElementById('returnToLogin').onclick=()=>go('/manager');
+  };
 }
 
 async function renderDashboard(){
@@ -410,6 +444,7 @@ async function route(){
   const qs=currentQuery();
   const adminToken=qs.get('admin');
   if(adminToken){location.href='/manager';return}
+  if(path==='/manager/reset-password'){renderPasswordReset();return}
   if(path==='/manager'){await renderDashboard();return}
   if(path==='/manager/team'){await renderTeam();return}
   if(path==='/manager/settings'){await renderOrgSettings();return}
@@ -420,7 +455,13 @@ async function route(){
   const gm=path.match(/^\/e\/([^/]+)$/);if(gm){await renderGuest(decodeURIComponent(gm[1]));return}
   await renderGuest('demo')
 }
-supabase.auth.onAuthStateChange(()=>{});
+supabase.auth.onAuthStateChange((event)=>{
+  if(event==='PASSWORD_RECOVERY'){
+    passwordRecoveryConfirmed=true;
+    history.replaceState({},'', '/manager/reset-password');
+    renderPasswordReset();
+  }
+});
 route();
 </script>
 </body>
