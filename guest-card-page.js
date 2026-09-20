@@ -139,8 +139,22 @@ export async function renderGuestCardPage({token,app,api}){
   }catch(err){if(err.name!=='AbortError')note('השיתוף לא הושלם. אפשר להוריד את התמונה ולשתף מהגלריה.')}
  }
  async function copyLink(){
-  try{await navigator.clipboard.writeText(location.href);note('הקישור הועתק ללוח ההעתקה (Clipboard). חשוב לשמור אותו במקום בטוח: זו הדרך היחידה לחזור לברכה שלך, ואין לנו עותק אחר של הקישור או אפשרות לשחזר אותו אם יאבד.')}
-  catch{prompt('העתק את הקישור כדי לחזור לברכה:',location.href)}
+  const feedback=app.querySelector('#personalLinkFeedback');
+  const button=app.querySelector('[data-action="copy"]');
+  try{
+   await navigator.clipboard.writeText(location.href);
+   if(feedback){
+    feedback.hidden=false;
+    feedback.textContent='✓ הקישור הועתק ללוח ההעתקה (Clipboard). חשוב לשמור אותו במקום בטוח: אין לך תיעוד אחר של הקישור, ואין אפשרות לשחזר אותו אם יאבד.';
+   }
+   if(button)button.textContent='✓ הקישור הועתק';
+  }catch{
+   if(feedback){
+    feedback.hidden=false;
+    feedback.textContent='לא הצלחנו להעתיק אוטומטית. יש להעתיק את הקישור בחלון שנפתח ולשמור אותו במקום בטוח — אין אפשרות לשחזר אותו אם יאבד.';
+   }
+   prompt('העתק ושמור את הקישור כדי לחזור לברכה:',location.href);
+  }
  }
  function showEdit(){
   editing=true;mount();
@@ -191,6 +205,7 @@ export async function renderGuestCardPage({token,app,api}){
    gallery+
    '<div class="card-private-tools"><p class="small">זהו קישור פרטי לחזרה לברכה, עריכה ומחיקה בזמן האירוע. אין שחזור לקישור שאבד — אל תשלח אותו בשיתוף התמונה.</p>'+
    '<button class="btn secondary" data-action="copy">העתק קישור לחזרה לברכה</button>'+
+   '<p id="personalLinkFeedback" class="msg ok" role="status" aria-live="polite" hidden style="flex-basis:100%;margin:6px 0 0;line-height:1.7"></p>'+
    (open?'<button class="btn danger" data-action="delete">מחק את הברכה</button>':
     '<button class="btn secondary" data-action="requestDelete">בקש מחיקה ממנהל האירוע</button>')+
    '</div></div></section>';
