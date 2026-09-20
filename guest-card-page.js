@@ -80,7 +80,7 @@ export async function renderGuestCardPage({token,app,api}){
    target={template,design:designFor(template)};
   }else if(kind==='alternative')target=alternativeDesign();
   else{
-   const template=state.templates.find(t=>t.id===origin?.design_snapshot?.template_id);
+   const template=origin?.template_snapshot||state.templates.find(t=>t.id===origin?.design_snapshot?.template_id);
    if(template)target={template,design:{...origin.design_snapshot}};
   }
   if(!target){note('אין כרגע עיצוב נוסף בספרייה שהוגדרה לאירוע.');return}
