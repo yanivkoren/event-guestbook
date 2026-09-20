@@ -32,7 +32,7 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
   return {...copy(base),id:'',name:'',organization_id:org,revision:1,active:true};
  }
  function paletteInputs(conf){
-  return '<div class="row">'+colors.map(([key,label])=>'<div class="field grow"><label class="label">'+label+'</label><input type="color" class="input" data-color="'+key+'" value="'+escape(conf[key]||'#ffffff')+'"></div>').join('')+'</div>';
+  return '<p class="small">בחירת הצבע מתעדכנת מיד בתצוגה, והקוד המלא מוצג לצד כל צבע.</p><div class="row">'+colors.map(([key,label])=>'<div class="field grow"><label class="label">'+label+'</label><input type="color" class="input" style="height:62px;cursor:pointer;padding:4px" data-color="'+key+'" value="'+escape(conf[key]||'#ffffff')+'"><div class="small" style="direction:ltr;text-align:center" data-color-value="'+key+'">'+escape(conf[key]||'#ffffff')+'</div></div>').join('')+'</div>';
  }
  function layoutInputs(conf){
   const p=conf.layout?.photo||{},m=conf.layout?.message||{},e=conf.layout?.emoji||{};
@@ -58,13 +58,19 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
    '<div class="field"><label class="label">צורת חלון התמונה</label><select id="photoShape" class="select">'+options([['rounded','מלבן עם פינות מעוגלות'],['ellipse','אליפסה']],p.shape)+'</select></div>';
  }
  function patternInputs(conf){
-  return '<div class="field"><label class="label">צורת עיטור</label><select class="select" id="rendererPattern">'+options([['botanical','צמחי'],['modern','מודרני'],['confetti','קונפטי'],['none','ללא']],conf.renderer_id||'none')+'</select></div><div class="field"><label class="label">עיטור PNG שקוף (אופציונלי, עד 2MB)</label><input id="patternPng" type="file" accept="image/png"><p class="small">הקובץ משויך לעיטור הזה בלבד ויוצג בפינות כדי לא לכסות תמונה או ברכה.</p></div>'+(conf.asset_url?'<img class="thumb" style="max-height:130px;object-fit:contain" src="'+escape(conf.asset_url)+'" alt="עיטור קיים">':'');
+  const choices=[['botanical','ענפים ועלים'],['modern','קווים אלגנטיים'],['confetti','קונפטי'],['stars','כוכבים'],['hearts','לבבות'],['geometric','צורות גאומטריות'],['waves','גלים'],['uploaded','עיטור מתמונה שהעלית'],['none','ללא עיטור']];
+  return '<div class="field"><label class="label">סוג העיטור</label><select class="select" id="rendererPattern">'+options(choices,conf.renderer_id||'none')+'</select><p class="small">אפשר ליצור כמה רכיבי עיטור שונים מאותו סוג. כשדרושה צורה אחרת לגמרי, בחר ״עיטור מתמונה שהעלית״ והעלה PNG.</p></div><div class="field"><label class="label">קובץ עיטור PNG — מה זה?</label><p class="small">זו תמונה עם רקע שקוף, למשל פרח, מסגרת או איור ששירי הכינה. הקובץ משתלב בפינות הכרטיס מעל הרקע, בלי להחליף את תמונת האורח או את הברכה. עד 2MB; מומלץ PNG שקוף.</p><input id="patternPng" type="file" accept=".png,image/png"></div>'+(conf.asset_url?'<div class="field"><p class="small">העיטור השמור:</p><img class="thumb" style="max-height:130px;object-fit:contain" src="'+escape(conf.asset_url)+'" alt="עיטור קיים"></div>':'');
+ }
+ function fontInputs(conf){
+  return '<div class="field"><label class="label">מקור הגופן</label><select class="select" id="rendererFont">'+options([['hebrew_clean','מובנה — עברית נקייה (Sans serif)'],['hebrew_classic','מובנה — עברית קלאסית (Serif)'],['uploaded','קובץ גופן שאני מעלה']],conf.renderer_id||'hebrew_clean')+'</select></div>'+
+    '<div class="field"><label class="label">הוספת גופן חדש</label><p class="small">כדי להוסיף גופן שאינו בספרייה, בחר ״קובץ גופן שאני מעלה״ והעלה קובץ WOFF2, WOFF, TTF או OTF (עד 2MB). מומלץ WOFF2 שתומך בעברית. יש להשתמש רק בגופן שמותר לך להטמיע באתר.</p><input type="file" id="fontFile" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"></div>'+
+    (conf.asset_url?'<p class="small">קיים קובץ גופן שמור. ניתן להחליף אותו בהעלאת קובץ חדש.</p>':'');
  }
  function editorMarkup(item,readOnly){
   const conf=item.config||{};
   return '<div class="top"><div><button class="btn secondary" id="backLibrary">← לספריות</button><h1>'+escape(readOnly?'צפייה ברכיב בסיס':item.id?'עריכת '+labels[kind]:'רכיב חדש: '+labels[kind])+'</h1></div></div><div id="componentFeedback" role="status"></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr))"><section class="card"><div class="content"><div class="field"><label class="label">שם הרכיב</label><input class="input" id="componentName" maxlength="120" value="'+escape(item.name)+'"></div>'+
    (kind==='palette'?paletteInputs(conf):kind==='layout'?layoutInputs(conf):kind==='pattern'?patternInputs(conf):
-    '<div class="field"><label class="label">משפחת גופנים</label><select class="select" id="rendererFont">'+options([['hebrew_clean','עברית נקייה'],['hebrew_classic','עברית קלאסית']],conf.renderer_id||'hebrew_clean')+'</select><p class="small">אפשר להרחיב בהמשך את מנוע הרינדור לגופנים נוספים בעברית.</p></div>')+
+    fontInputs(conf))+
    '<label class="switchrow"><span>פעיל לבחירה באירועים</span><input type="checkbox" id="componentActive" '+(item.active?'checked':'')+'></label><div class="actions"><button class="btn secondary" id="previewComponent">תצוגה מקדימה</button><button class="btn" id="saveComponent">'+(readOnly?'שכפל לרכיב חדש':'שמור רכיב')+'</button></div></div></section><section class="card"><div class="content"><h2>תצוגה מקדימה</h2><div id="componentPreview" class="personal-card-image"></div></div></section></div>';
  }
  function draft(item){
