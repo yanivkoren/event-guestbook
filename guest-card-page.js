@@ -33,6 +33,20 @@ export async function renderGuestCardPage({token,app,api}){
   viewedId=present?preferredId:state.selected_version_id||state.versions[state.versions.length-1]?.id||null;
   return true;
  }
+ function allowedFor(template,key,all){
+  const perEvent=state.card_design_rules?.[template.id]?.[key];
+  const options=Array.isArray(perEvent)?perEvent.filter(x=>all.includes(x)):all;
+  return options;
+ }
+ function designFor(template){
+  const d=defaultDesign(template);
+  d.palette=allowedFor(template,'palettes',Object.keys(template.palettes))[0];
+  d.frame=allowedFor(template,'frames',template.frame_options)[0];
+  d.pattern_id=allowedFor(template,'patterns',template.pattern_options)[0];
+  d.typography_id=allowedFor(template,'typography',template.typography_options)[0];
+  if(!d.palette||!d.frame||!d.pattern_id||!d.typography_id)throw Error('לא הוגדרו די אפשרויות עיצוב לאירוע');
+  return d;
+ }
  function alternativeDesign(){
   const allowed=state.templates||[],current=visible();
   const taken=state.versions.filter(v=>v.creation_kind!=='edit').map(v=>v.design_snapshot);
@@ -40,11 +54,11 @@ export async function renderGuestCardPage({token,app,api}){
   const start=allowed.findIndex(t=>t.id===current?.design_snapshot?.template_id);
   const ordered=[...allowed.slice(Math.max(0,start+1)),...allowed.slice(0,Math.max(0,start+1))];
   for(const t of ordered){
-   for(const palette of Object.keys(t.palettes)){
-    for(const pattern_id of t.pattern_options){
-     for(const frame of t.frame_options){
-      for(const typography_id of t.typography_options){
-       const candidate={...defaultDesign(t),palette,pattern_id,frame,typography_id,
+   for(const palette of allowedFor(t,'palettes',Object.keys(t.palettes))){
+    for(const pattern_id of allowedFor(t,'patterns',t.pattern_options)){
+     for(const frame of allowedFor(t,'frames',t.frame_options)){
+      for(const typography_id of allowedFor(t,'typography',t.typography_options)){
+       const candidate={...designFor(t),palette,pattern_id,frame,typography_id,
         crop_x:current?.design_snapshot?.crop_x??.5,crop_y:current?.design_snapshot?.crop_y??.5};
        if(!taken.some(d=>['template_id','palette','pattern_id','frame','typography_id','photo_position'].every(k=>d[k]===candidate[k])))
         return {template:t,design:candidate};
@@ -63,7 +77,7 @@ export async function renderGuestCardPage({token,app,api}){
   if(kind==='initial'){
    const template=state.templates.find(t=>t.id===state.default_template_id)||state.templates[0];
    if(!template){errorScreen('לא הוגדר עיצוב לאירוע.');return}
-   target={template,design:defaultDesign(template)};
+   target={template,design:designFor(template)};
   }else if(kind==='alternative')target=alternativeDesign();
   else{
    const template=state.templates.find(t=>t.id===origin?.design_snapshot?.template_id);
