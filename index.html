@@ -137,7 +137,7 @@ function renderAuth(){
   document.getElementById('signUp').onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<6)return msg('יש להזין אימייל וסיסמה של לפחות 6 תווים.');const {data,error}=await supabase.auth.signUp({email,password});if(error)return msg(error.message);if(data.session){orgContext=null;go('/manager')}else msg('החשבון נוצר. אם נשלח מייל אימות, יש לאשר אותו ואז להתחבר. הגישה תיפתח רק אם הסופר־מנהל הגדיר את האימייל הזה כעובד.')};
   document.getElementById('forgotPassword').onclick=async()=>{
     const email=document.getElementById('email').value.trim().toLowerCase(),button=document.getElementById('forgotPassword');
-    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))return msg('יש להזין כתובת אימייל תקינה כדי לאפס סיסמה.');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg('יש להזין כתובת אימייל תקינה כדי לאפס סיסמה.');
     button.disabled=true;
     const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/manager/reset-password'});
     button.disabled=false;
