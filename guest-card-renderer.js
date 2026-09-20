@@ -97,16 +97,31 @@ export async function renderCardPages({template,design,content,image}){
  if(!content.name?.trim())throw Error('חסר שם מברך');
  const p=template.palettes[design.palette],layout=template.layout,typ=TYPOGRAPHY[design.typography_id];
  if(!typ)throw Error('גופן לא זמין');
+ let decorative=null;
+ if(template.decorative_asset_url){
+  try{decorative=await loadPhoto(template.decorative_asset_url)}catch(e){console.warn('Decorative asset unavailable; keeping content',e)}
+ }
  const pages=[];let remaining=String(content.message||''),first=true;
  // Bound the loop and signal instead of ever dropping text silently.
  for(let pageNo=0;pageNo<20;pageNo++){
   const {c,ctx}=newPage(template,design);const withPhoto=first&&!!image;
+  if(decorative){
+   // Reserved corners only: uploaded artwork never covers names, images, or message.
+   ctx.save();ctx.globalAlpha=.65;
+   ctx.drawImage(decorative,72,75,115,115);
+   ctx.drawImage(decorative,893,75,115,115);
+   ctx.restore();
+  }
   label(ctx,String(content.title||''),540,layout.title.y,910,layout.title.size,typ,p.text,typ.titleWeight);
   if(withPhoto)photo(ctx,image,layout.photo,design,p);
   if(first)label(ctx,String(content.name),540,withPhoto?layout.name.y:230,890,layout.name.size,typ,p.accent,typ.titleWeight);
   else label(ctx,String(content.name),540,205,890,36,typ,p.accent,typ.titleWeight);
-  const top=withPhoto?layout.message.top:first?332:315;
-  const bottom=first&&content.emoji?Math.min(layout.message.bottom,1230):first?1230:1230;
+  const layoutKind=withPhoto?(String(content.message||'').length>240?'photo_long':'photo'):(first?(String(content.message||'').length>240?'no_photo_long':'no_photo'):'continuation');
+  const variant=template.layout_variants?.[layoutKind]||{};
+  const defaultTop=withPhoto?layout.message.top:first?332:315;
+  const top=pageNo===0?(variant.message_top??defaultTop):315;
+  const rawBottom=pageNo===0?(variant.message_bottom??(first?layout.message.bottom:1230)):1230;
+  const bottom=first&&content.emoji?Math.min(rawBottom,1195):Math.min(rawBottom,1230);
   let font=Math.max(22,Math.min(36,layout.message.size)),leading=Math.ceil(font*(layout.message.line_height||1.32));
   ctx.font=`${typ.weight} ${font}px ${typ.family}`;
   const lines=remaining?linesFor(ctx,remaining,858):[];
