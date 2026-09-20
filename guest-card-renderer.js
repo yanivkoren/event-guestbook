@@ -1,9 +1,12 @@
 // Browser-only deterministic renderer: no image generation, no rewriting source media/text.
 export const CARD_WIDTH=1080,CARD_HEIGHT=1350;
+export const CARD_FORMATS={'4:5':{width:1080,height:1350},'9:16':{width:1080,height:1920}};
+export const cardFormat=t=>CARD_FORMATS[t?.format]||CARD_FORMATS['4:5'];
 export const TYPOGRAPHY={
  hebrew_clean:{family:'Arial, "Noto Sans Hebrew", sans-serif',weight:'400',titleWeight:'700'},
  hebrew_classic:{family:'Georgia, "Noto Serif Hebrew", serif',weight:'400',titleWeight:'700'}
 };
+const visible=(layout,key)=>layout?.visibility?.[key]!==false;
 const clamp=(v,min=0,max=1)=>Math.min(max,Math.max(min,Number(v)));
 function round(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y+h,x+w,y,r);ctx.closePath()}
 export function defaultDesign(t){return {
@@ -38,6 +41,13 @@ function decorate(ctx,t,p,d){
    ctx.beginPath();ctx.moveTo(0,0);ctx.bezierCurveTo(30,-45,65,-95,75,-150);ctx.stroke();
    for(let i=0;i<5;i++){const x=15+i*11,y=-20-i*28;ctx.beginPath();ctx.ellipse(x,y,11,21,-.6,0,Math.PI*2);ctx.fill()}
    ctx.restore();}
+ }else if(['stars','hearts','geometric','waves'].includes(rendererPattern(t,d))){
+  ctx.fillStyle=p.accent2;ctx.strokeStyle=p.accent2;ctx.lineWidth=3;
+  for(let i=0;i<18;i++){const x=84+(i*179)%910,y=110+(i*217)%1130;
+   if(rendererPattern(t,d)==='stars'||rendererPattern(t,d)==='hearts'){ctx.font='28px sans-serif';ctx.fillText(rendererPattern(t,d)==='stars'?'✦':'♥',x,y)}
+   else if(rendererPattern(t,d)==='geometric'){ctx.strokeRect(x,y,20+i%3*8,20+i%3*8)}
+   else{ctx.beginPath();ctx.arc(x,y,14,0,Math.PI);ctx.stroke()}
+  }
  }else if(rendererPattern(t,d)==='confetti'){
   for(let i=0;i<24;i++){ctx.fillStyle=i%2?p.accent:p.accent2;ctx.beginPath();ctx.arc(80+(i*179)%915,74+(i*227)%1210,3+i%3,0,2*Math.PI);ctx.fill()}
  }else{
@@ -91,22 +101,31 @@ function label(ctx,text,x,y,maxWidth,fontSize,typ,color,weight='700'){
  ctx.fillText(text,x,y);ctx.restore();
 }
 function newPage(t,d){
- const c=document.createElement('canvas');c.width=CARD_WIDTH;c.height=CARD_HEIGHT;
- const ctx=c.getContext('2d');if(!ctx)throw Error('Canvas אינו זמין');decorate(ctx,t,t.palettes[d.palette],d);return {c,ctx};
+ const c=document.createElement('canvas'),format=cardFormat(t);c.width=format.width;c.height=format.height;
+ const ctx=c.getContext('2d');if(!ctx)throw Error('Canvas אינו זמין');
+ ctx.fillStyle=t.palettes[d.palette].background;ctx.fillRect(0,0,c.width,c.height);
+ ctx.translate(0,(format.height-CARD_HEIGHT)/2);decorate(ctx,t,t.palettes[d.palette],d);return {c,ctx};
 }
-export async function renderCardPages({template,design,content,image}){
+export async function renderCardPages({template,design,content,image,previewGuides=false}){
  validateDesign(template,design);await document.fonts.ready;
- if(!content.name?.trim())throw Error('חסר שם מברך');
- const p=template.palettes[design.palette],layout=template.layout,typ=TYPOGRAPHY[rendererTypography(template,design)];
+ if(!content.name?.trim()&&visible(template.layout,'name'))throw Error('חסר שם מברך');
+ const p=template.palettes[design.palette],layout=template.layout;
+ const custom=template.font_definitions?.[design.typography_id];
+ let typ=TYPOGRAPHY[rendererTypography(template,design)];
+ if(custom?.asset_url){
+  const family='guestbook_'+String(design.typography_id).replace(/[^a-z0-9_]/gi,'_');
+  const face=new FontFace(family,'url("'+custom.asset_url+'")');
+  await face.load();document.fonts.add(face);typ={family:'"'+family+'", sans-serif',weight:'400',titleWeight:'700'};
+ }
  if(!typ)throw Error('גופן לא זמין');
  let decorative=null;
  if(template.pattern_asset_urls?.[design.pattern_id]||template.decorative_asset_url){
   try{decorative=await loadPhoto(template.pattern_asset_urls?.[design.pattern_id]||template.decorative_asset_url)}catch(e){console.warn('Decorative asset unavailable; keeping content',e)}
  }
- const pages=[];let remaining=String(content.message||''),first=true;
+ const pages=[];let remaining=visible(layout,'message')?String(content.message||''):'',first=true;
  // Bound the loop and signal instead of ever dropping text silently.
  for(let pageNo=0;pageNo<20;pageNo++){
-  const {c,ctx}=newPage(template,design);const withPhoto=first&&!!image;
+  const {c,ctx}=newPage(template,design);const withPhoto=first&&!!image&&visible(layout,'photo');
   if(decorative){
    // Reserved corners only: uploaded artwork never covers names, images, or message.
    ctx.save();ctx.globalAlpha=.65;
@@ -114,16 +133,18 @@ export async function renderCardPages({template,design,content,image}){
    ctx.drawImage(decorative,893,75,115,115);
    ctx.restore();
   }
-  label(ctx,String(content.title||''),540,layout.title.y,910,layout.title.size,typ,p.text,typ.titleWeight);
+  if(visible(layout,'title'))label(ctx,String(content.title||''),540,layout.title.y,910,layout.title.size,typ,p.text,typ.titleWeight);
   if(withPhoto)photo(ctx,image,layout.photo,design,p);
-  if(first)label(ctx,String(content.name),540,withPhoto?layout.name.y:230,890,layout.name.size,typ,p.accent,typ.titleWeight);
-  else label(ctx,String(content.name),540,205,890,36,typ,p.accent,typ.titleWeight);
+  if(visible(layout,'name')){
+   if(first)label(ctx,String(content.name),540,withPhoto?layout.name.y:230,890,layout.name.size,typ,p.accent,typ.titleWeight);
+   else label(ctx,String(content.name),540,205,890,36,typ,p.accent,typ.titleWeight);
+  }
   const layoutKind=withPhoto?(String(content.message||'').length>240?'photo_long':'photo'):(first?(String(content.message||'').length>240?'no_photo_long':'no_photo'):'continuation');
   const variant=template.layout_variants?.[layoutKind]||{};
   const defaultTop=withPhoto?layout.message.top:first?332:315;
   const top=pageNo===0?(variant.message_top??defaultTop):315;
   const rawBottom=pageNo===0?(variant.message_bottom??(first?layout.message.bottom:1230)):1230;
-  const bottom=first&&content.emoji?Math.min(rawBottom,1195):Math.min(rawBottom,1230);
+  const bottom=first&&content.emoji&&visible(layout,'emoji')?Math.min(rawBottom,1195):Math.min(rawBottom,1230);
   let font=Math.max(22,Math.min(36,layout.message.size)),leading=Math.ceil(font*(layout.message.line_height||1.32));
   ctx.font=`${typ.weight} ${font}px ${typ.family}`;
   const lines=remaining?linesFor(ctx,remaining,858):[];
@@ -133,13 +154,23 @@ export async function renderCardPages({template,design,content,image}){
   // Preserve explicit blank lines by storing line offsets in the snapshot.
   ctx.save();drawLines(ctx,slice,540,top,leading,p);ctx.restore();
   remaining=lines.slice(capacity).join('\n');
-  if(first&&content.emoji){
-   const hasReactionLabel=!!String(content.reaction_label||'').trim();
-   label(ctx,String(content.emoji),540,hasReactionLabel?1206:layout.emoji.y,790,hasReactionLabel?49:layout.emoji.size,typ,p.text,'400');
-   if(hasReactionLabel)label(ctx,String(content.reaction_label),540,1265,840,30,typ,p.text,'400');
+  if(first&&content.emoji&&visible(layout,'emoji')){
+   const hasReactionLabel=!!String(content.reaction_label||'').trim()&&visible(layout,'reaction_label');
+   label(ctx,String(content.emoji),540,layout.emoji.y,790,hasReactionLabel?49:layout.emoji.size,typ,p.text,'400');
+   if(hasReactionLabel)label(ctx,String(content.reaction_label),540,Math.min(1290,layout.emoji.y+62),840,30,typ,p.text,'400');
   }
   ctx.save();ctx.font=`22px ${typ.family}`;ctx.textAlign='center';ctx.fillStyle=p.accent;
   if(!first||remaining)ctx.fillText(`עמוד ${pageNo+1}`,540,1300);ctx.restore();
+  if(previewGuides){
+   ctx.save();ctx.setLineDash([12,8]);ctx.strokeStyle='#327dcb';ctx.fillStyle='#327dcb';ctx.lineWidth=3;ctx.font='bold 23px Arial';ctx.textAlign='right';ctx.direction='rtl';
+   const guide=(name,x,y,w,h)=>{ctx.strokeRect(x,y,w,h);ctx.fillText(name,x+w-4,Math.max(26,y-7))};
+   if(visible(layout,'title'))guide('כותרת',90,layout.title.y-4,900,70);
+   if(visible(layout,'photo')&&withPhoto)guide('תמונה',layout.photo.x,layout.photo.y,layout.photo.w,layout.photo.h);
+   if(visible(layout,'name'))guide('שם',90,withPhoto?layout.name.y:230,900,65);
+   if(visible(layout,'message'))guide('ברכה',111,top,858,Math.max(25,bottom-top));
+   if(visible(layout,'emoji'))guide('אימוג׳י',90,layout.emoji.y-4,900,63);
+   ctx.restore();
+  }
   pages.push(c);first=false;
   if(!remaining)return pages;
  }
