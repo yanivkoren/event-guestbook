@@ -100,12 +100,21 @@ export async function renderGuestCardPage({token,app,api,go}){
   }catch(e){notice(e.message)}finally{isBusy=false}
  }
  function nextDesign(){
-  readForm();const index=available.findIndex(t=>t.id===template.id);
-  if(available.length>1)template=available[(index+1)%available.length];
-  else{const ps=Object.keys(template.palettes);design.palette=ps[(ps.indexOf(design.palette)+1)%ps.length]}
-  design={...defaultDesign(template),crop_x:design.crop_x,crop_y:design.crop_y,
-   ...(available.length===1?{palette:design.palette}:{})};
-  mount();drawPreview();
+  readForm();
+  const tried=data.versions.filter(v=>v.creation_kind!=='edit').map(v=>v.design_snapshot);
+  const byTemplate=[...available.slice(available.indexOf(template)+1),...available.slice(0,available.indexOf(template)+1)];
+  for(const candidateTemplate of byTemplate){
+   const paletteKeys=Object.keys(candidateTemplate.palettes);
+   for(const palette of paletteKeys){
+    for(const pattern_id of candidateTemplate.pattern_options){
+     const candidate={...defaultDesign(candidateTemplate),palette,pattern_id,crop_x:design.crop_x,crop_y:design.crop_y};
+     const isUsed=tried.some(v=>['template_id','palette','frame','pattern_id','typography_id','photo_position'].every(k=>v[k]===candidate[k]));
+     if(!isUsed){template=candidateTemplate;design=candidate;mount();return true}
+    }
+   }
+  }
+  notice('אין עוד שילובי עיצוב חדשים בספרייה שהוגדרה לאירוע');
+  return false;
  }
  function mount(){
   const closed=!active,link=location.href;
@@ -143,7 +152,7 @@ export async function renderGuestCardPage({token,app,api,go}){
    document.getElementById('cardTemplate').onchange=e=>{readForm();template=available.find(t=>t.id===e.target.value)||template;design={...defaultDesign(template),crop_x:design.crop_x,crop_y:design.crop_y};mount();drawPreview()};
    document.getElementById('previewCard').onclick=()=>{readForm();drawPreview()};
    document.getElementById('saveCard').onclick=()=>saveVersion(data.versions.length?'edit':'initial');
-   document.getElementById('differentCard').onclick=()=>{if(attempts()>=data.max_design_attempts)return;nextDesign();saveVersion('alternative')};
+   document.getElementById('differentCard').onclick=()=>{if(attempts()>=data.max_design_attempts)return;if(nextDesign())saveVersion('alternative')};
    document.getElementById('deleteOwn').onclick=async()=>{if(!confirm('למחוק את הברכה? הגישה תוסר מיידית.'))return;try{await request('delete','POST',{});app.innerHTML='<div class="msg">הברכה הוסרה. עותקים שכבר שותפו מחוץ למערכת לא ניתנים למחיקה מכאן.</div>'}catch(e){notice(e.message)}};
   }else document.getElementById('requestDelete').onclick=async()=>{try{await request('request-deletion','POST',{});notice('בקשת המחיקה נשלחה למנהל האירוע.')}catch(e){notice(e.message)}};
   drawVersionGallery();
