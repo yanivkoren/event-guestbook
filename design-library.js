@@ -100,9 +100,21 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
   else conf.renderer_id=app.querySelector('#rendererFont').value;
   return {...item,name,config:conf,active:app.querySelector('#componentActive').checked};
  }
+ function examplePhoto(){
+  const c=document.createElement('canvas');c.width=600;c.height=460;const x=c.getContext('2d');
+  const sky=x.createLinearGradient(0,0,0,460);sky.addColorStop(0,'#c8dce5');sky.addColorStop(1,'#ead5c5');x.fillStyle=sky;x.fillRect(0,0,600,460);
+  x.fillStyle='#f5e1b7';x.beginPath();x.arc(460,115,52,0,Math.PI*2);x.fill();
+  x.fillStyle='#879c91';x.beginPath();x.moveTo(0,315);x.lineTo(170,145);x.lineTo(345,320);x.fill();
+  x.fillStyle='#68857d';x.beginPath();x.moveTo(140,345);x.lineTo(375,130);x.lineTo(600,340);x.fill();
+  x.fillStyle='#466b64';x.fillRect(0,335,600,125);
+  x.fillStyle='#fff';x.globalAlpha=.85;x.fillRect(105,362,390,65);x.globalAlpha=1;
+  x.fillStyle='#24443b';x.font='bold 27px Arial';x.textAlign='center';x.fillText('תמונה לדוגמה',300,404);
+  const image=new Image();image.src=c.toDataURL('image/png');return image.decode().then(()=>image);
+ }
  async function preview(item){
   const area=app.querySelector('#componentPreview'),rev=++previewSeq;if(!area)return;
   area.innerHTML='<div class="loading">מכין תצוגה…</div>';
+  const tempUrls=[];
   try{
    const edited=draft(item);
    const byKind=k=>components.find(c=>c.kind===k&&c.active);
@@ -112,11 +124,27 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
    const font=(kind==='font_set'?edited:byKind('font_set'))?.config;
    if(!layout||!palette||!pattern||!font)throw Error('חסר רכיב לתצוגה');
    const patternId=pattern.renderer_id||'none',fontId=font.renderer_id||'hebrew_clean';
+   let patternUrl=pattern.asset_url,fontUrl=font.asset_url;
+   if(kind==='pattern'&&app.querySelector('#patternPng')?.files?.[0]){
+    const file=app.querySelector('#patternPng').files[0];patternUrl=URL.createObjectURL(file);tempUrls.push(patternUrl);
+   }
+   if(kind==='font_set'&&app.querySelector('#fontFile')?.files?.[0]){
+    const file=app.querySelector('#fontFile').files[0];fontUrl=URL.createObjectURL(file);tempUrls.push(fontUrl);
+   }
+   if(fontId==='uploaded'&&!fontUrl)throw Error('כדי לראות גופן חדש, בחר קובץ גופן.');
+   if(patternId==='uploaded'&&!patternUrl)throw Error('כדי לראות עיטור שהעלית, בחר קובץ PNG.');
    const design={template_id:'preview',palette:'preview',pattern_id:patternId,typography_id:fontId,frame:'thin',crop_strategy:'center',photo_position:'center',crop_x:.5,crop_y:.5};
-   const t={id:'preview',active:true,layout:layout.layout,layout_variants:layout.layout_variants,palettes:{preview:palette},pattern_options:[patternId],typography_options:[fontId],frame_options:['thin'],crop_strategies:['center'],photo_positions:['center'],pattern_asset_urls:pattern.asset_url?{[patternId]:pattern.asset_url}:{}};
-   const pages=await renderCardPages({template:t,design,content:{title:'שמחה גדולה',name:'משפחת ישראלי',message:'המון אהבה, שמחה ורגעים טובים. תודה שאתם איתנו ביום המיוחד!',emoji:'❤️'},image:null});
-   if(rev!==previewSeq)return;area.innerHTML='';for(const canvas of pages){canvas.className='card-preview';area.appendChild(canvas)}
+   const t={id:'preview',active:true,format:layout.format||'4:5',layout:layout.layout,layout_variants:layout.layout_variants,palettes:{preview:palette},
+    pattern_options:[patternId],typography_options:[fontId],frame_options:['thin'],crop_strategies:['center'],photo_positions:['center'],
+    pattern_asset_urls:patternUrl?{[patternId]:patternUrl}:{},font_definitions:fontUrl?{[fontId]:{asset_url:fontUrl}}:{}};
+   const sample=await examplePhoto();
+   const pages=await renderCardPages({template:t,design,content:{title:'שמחה גדולה',name:'משפחת ישראלי',
+    message:'המון אהבה, שמחה ורגעים טובים. תודה שאתם איתנו ביום המיוחד!',emoji:'❤️',reaction_label:'אוהבים אתכם'},image:sample,previewGuides:true});
+   if(rev!==previewSeq)return;area.innerHTML='';
+   for(const canvas of pages){canvas.className='card-preview';area.appendChild(canvas)}
+   const p=document.createElement('p');p.className='small';p.textContent='קווי המתאר המקווקווים מוצגים רק בתצוגת העריכה ולא בקובץ הכרטיס הסופי.';area.appendChild(p);
   }catch(e){if(rev===previewSeq)area.innerHTML='<div class="msg err">'+escape(e.message)+'</div>'}
+  finally{for(const url of tempUrls)URL.revokeObjectURL(url)}
  }
  function edit(source){
   current=source?copy(source):newItem();const readOnly=!!source&&!source.organization_id;
@@ -124,7 +152,12 @@ export async function renderDesignLibrary({app,supabase,ctx,go}){
   app.querySelector('#backLibrary').onclick=list;
   app.querySelector('#previewComponent').onclick=()=>preview(current);
   app.querySelector('#saveComponent').onclick=()=>save(current,readOnly);
-  if(kind!=='pattern'||!current.config?.asset_url)preview(current);
+  app.querySelectorAll('[data-color]').forEach(field=>field.addEventListener('input',()=>{
+   const label=app.querySelector('[data-color-value="'+field.dataset.color+'"]');if(label)label.textContent=field.value;
+   preview(current);
+  }));
+  app.querySelectorAll('[data-layout], [data-visible], #cardFormat, #photoShape, #rendererPattern, #rendererFont, #patternPng, #fontFile]').forEach(field=>field.addEventListener('change',()=>preview(current)));
+  preview(current);
  }
  async function save(item,readOnly){
   const btn=app.querySelector('#saveComponent');btn.disabled=true;
