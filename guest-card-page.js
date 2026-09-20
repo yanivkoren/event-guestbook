@@ -28,7 +28,7 @@ export async function renderGuestCardPage({token,app,api}){
  }
  async function refresh(preferredId){
   state=await request('state');
-  if(state.deleted){app.className='wrap';app.innerHTML='<section class="card"><div class="content"><h1>הברכה הוסרה</h1><p>הברכה אינה זמינה עוד דרך הקישור האישי.</p></div></section>';return false}
+  if(state.deleted){app.className='wrap';app.innerHTML='<section class="card"><div class="content"><h1>הברכה נמחקה</h1><p>הברכה הוסרה מהמערכת ואינה זמינה עוד לצפייה או לשיתוף.</p></div></section>';return false}
   const present=state.versions.some(v=>v.id===preferredId);
   viewedId=present?preferredId:state.selected_version_id||state.versions[state.versions.length-1]?.id||null;
   return true;
@@ -70,7 +70,9 @@ export async function renderGuestCardPage({token,app,api}){
    if(template)target={template,design:{...origin.design_snapshot}};
   }
   if(!target){note('אין כרגע עיצוב נוסף בספרייה שהוגדרה לאירוע.');return}
-  const text=content||origin?.content_snapshot||state.original;
+  const source=content||origin?.content_snapshot||state.original;
+  const reaction=(state.reaction_options||[]).find(o=>o.emoji===source.emoji);
+  const text={...source,reaction_label:reaction?.label||source.reaction_label||''};
   markBusy(true);
   if(!state.versions.length)app.innerHTML='<div class="loading">מכינים את כרטיס הברכה שלך…</div>';
   else note(kind==='alternative'?'מכינים לך עיצוב אחר…':'שומרים גרסה חדשה…');
@@ -111,10 +113,12 @@ export async function renderGuestCardPage({token,app,api}){
  }
  async function loadImageFiles(v){
   const files=[];
+  const eventFilename=String(state.event?.title||'ברכה').normalize('NFC')
+   .replace(/[\\/:*?"<>|\u0000-\u001f]/g,'').replace(/\s+/g,' ').trim().slice(0,80)||'ברכה';
   for(let i=0;i<v.page_urls.length;i++){
    const res=await fetch(v.page_urls[i]);
    if(!res.ok)throw Error('לא ניתן לטעון את התמונה לשיתוף');
-   files.push(new File([await res.blob()],'greeting-'+(i+1)+'.png',{type:'image/png'}));
+   files.push(new File([await res.blob()],eventFilename+(v.page_urls.length>1?'-עמוד-'+(i+1):'')+'.png',{type:'image/png'}));
   }
   return files;
  }
@@ -135,7 +139,7 @@ export async function renderGuestCardPage({token,app,api}){
   }catch(err){if(err.name!=='AbortError')note('השיתוף לא הושלם. אפשר להוריד את התמונה ולשתף מהגלריה.')}
  }
  async function copyLink(){
-  try{await navigator.clipboard.writeText(location.href);note('העתקנו את הקישור לחזרה לברכה. שמור אותו לעצמך — הוא מאפשר ניהול ומחיקה.')}
+  try{await navigator.clipboard.writeText(location.href);note('הקישור הועתק ללוח ההעתקה (Clipboard). חשוב לשמור אותו במקום בטוח: זו הדרך היחידה לחזור לברכה שלך, ואין לנו עותק אחר של הקישור או אפשרות לשחזר אותו אם יאבד.')}
   catch{prompt('העתק את הקישור כדי לחזור לברכה:',location.href)}
  }
  function showEdit(){
@@ -148,7 +152,9 @@ export async function renderGuestCardPage({token,app,api}){
    title:baseVersion?.content_snapshot?.title??state.original.title,
    name:document.getElementById('editName').value,
    message:document.getElementById('editMessage').value,
-   emoji:document.getElementById('editEmoji').value
+   emoji:document.getElementById('editEmoji').value,
+   reaction_label:(state.reaction_options||[]).find(o=>o.emoji===document.getElementById('editEmoji').value)?.label
+    ||(baseVersion?.content_snapshot?.emoji===document.getElementById('editEmoji').value?baseVersion?.content_snapshot?.reaction_label:'')||''
   };
  }
  function mount(){
@@ -203,7 +209,7 @@ export async function renderGuestCardPage({token,app,api}){
   bind('cancelEdit',()=>{editing=false;mount()});
   bind('copy',copyLink);
   bind('delete',async()=>{
-   if(!confirm('למחוק את הברכה? לא תהיה אפשרות לגשת אליה דרך הקישור האישי.'))return;
+   if(!confirm('למחוק את הברכה? היא תוסר מהמערכת ולא תהיה זמינה עוד לצפייה או לשיתוף.'))return;
    try{await request('delete',{});await refresh();}catch(err){note(err.message)}
   });
   bind('requestDelete',async()=>{try{await request('request-deletion',{});note('בקשת המחיקה נשלחה למנהל האירוע.')}catch(err){note(err.message)}});
